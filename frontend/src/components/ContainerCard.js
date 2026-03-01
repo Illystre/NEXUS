@@ -12,8 +12,36 @@ const STATE = {
 
 function fmtMem(b) {
   if (!b) return '0 MB';
-  const mb = b/1024/1024;
-  return mb >= 1024 ? `${(mb/1024).toFixed(1)}GB` : `${mb.toFixed(0)}MB`;
+  const mb = b / 1024 / 1024;
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toFixed(0)} MB`;
+}
+
+function fmtUptime(status) {
+  // Status looks like "Up 2 hours" or "Up 3 days" or "Exited (0) 2 hours ago"
+  if (!status) return null;
+  if (status.startsWith('Up ')) return status.replace('Up ', '');
+  return null;
+}
+
+function PortBadge({ port }) {
+  const host = port.PublicPort;
+  const internal = port.PrivatePort;
+  const proto = port.Type || 'tcp';
+  if (!host) return (
+    <span style={s.portBadge}>{internal}/{proto}</span>
+  );
+  return (
+    <a
+      href={`http://localhost:${host}`}
+      target="_blank"
+      rel="noreferrer"
+      style={s.portLink}
+      title={`Abrir localhost:${host}`}
+    >
+      {host}→{internal}
+      <span style={s.portArrow}>↗</span>
+    </a>
+  );
 }
 
 export default function ContainerCard({ container, onAction }) {
@@ -50,7 +78,7 @@ export default function ContainerCard({ container, onAction }) {
     return () => { socket.emit('unsubscribe:logs', { containerId: container.id }); socket.disconnect(); };
   }, [showLogs, container.id, token]);
 
-  useEffect(() => { if (showLogs) logsEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [logs, showLogs]);
+  useEffect(() => { if (showLogs) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [logs, showLogs]);
 
   const doAction = async (action) => {
     setActionLoading(action);
@@ -60,19 +88,35 @@ export default function ContainerCard({ container, onAction }) {
 
   const st = STATE[container.state] || { color:'var(--text-muted)', bg:'transparent', border:'var(--border)', label: container.state };
   const isRunning = container.state === 'running';
+  const uptime = fmtUptime(container.status);
+  const ports = (container.ports || []).filter(p => p.PrivatePort);
 
   return (
     <div style={s.card}>
       <div style={s.cardTop}>
-        <div style={s.cardMain}>
-          <div style={s.nameRow}>
-            <div style={{...s.statusDot, background: st.color, boxShadow: isRunning ? `0 0 0 3px ${st.color}25` : 'none', animation: isRunning ? 'pulse 2.5s infinite' : 'none'}} />
-            <div style={s.name}>{container.name}</div>
-            <div style={{...s.statePill, color: st.color, background: st.bg, border: `1px solid ${st.border}`}}>
-              {st.label}
-            </div>
+        <div style={s.nameRow}>
+          <div style={{...s.statusDot, background: st.color, boxShadow: isRunning ? `0 0 0 3px ${st.color}25` : 'none'}} />
+          <div style={s.name}>{container.name}</div>
+          <div style={{...s.statePill, color: st.color, background: st.bg, border: `1px solid ${st.border}`}}>
+            {st.label}
           </div>
-          <div style={s.imageName}>{container.image}</div>
+        </div>
+        <div style={s.imageName}>{container.image}</div>
+
+        {/* Uptime + Ports row */}
+        <div style={s.metaRow}>
+          {uptime && (
+            <div style={s.uptimeBadge}>
+              <span style={s.uptimeIcon}>⏱</span>
+              {uptime}
+            </div>
+          )}
+          {ports.length > 0 && (
+            <div style={s.portsRow}>
+              {ports.slice(0, 4).map((p, i) => <PortBadge key={i} port={p} />)}
+              {ports.length > 4 && <span style={s.morePorts}>+{ports.length - 4}</span>}
+            </div>
+          )}
         </div>
       </div>
 
@@ -83,15 +127,13 @@ export default function ContainerCard({ container, onAction }) {
         </div>
       )}
 
-      <div style={s.statusText}>{container.status}</div>
-
       <div style={s.actions}>
         <div style={s.actionsLeft}>
           {isRunning
-            ? <ActionBtn label="Stop" icon="⏹" onClick={() => doAction('stop')} variant="danger" loading={actionLoading==='stop'} />
-            : <ActionBtn label="Start" icon="▶" onClick={() => doAction('start')} variant="success" loading={actionLoading==='start'} />
+            ? <ActionBtn label="Stop"    icon="⏹" onClick={() => doAction('stop')}    variant="danger"   loading={actionLoading==='stop'} />
+            : <ActionBtn label="Start"   icon="▶" onClick={() => doAction('start')}   variant="success"  loading={actionLoading==='start'} />
           }
-          <ActionBtn label="Restart" icon="↺" onClick={() => doAction('restart')} variant="default" loading={actionLoading==='restart'} />
+          <ActionBtn label="Restart" icon="↺" onClick={() => doAction('restart')} variant="default"  loading={actionLoading==='restart'} />
         </div>
         <button
           style={{...s.logsToggle, color: showLogs ? 'var(--brand)' : 'var(--text-muted)', borderColor: showLogs ? 'var(--border-focus)' : 'var(--border)', background: showLogs ? 'var(--brand-glow)' : 'transparent'}}
@@ -142,10 +184,7 @@ function ActionBtn({ label, icon, onClick, variant, loading }) {
   };
   const c = colors[variant] || colors.default;
   return (
-    <button
-      style={{...s.actionBtn, color: c.color, background: c.bg, borderColor: c.border}}
-      onClick={onClick} disabled={loading}
-    >
+    <button style={{...s.actionBtn, color: c.color, background: c.bg, borderColor: c.border}} onClick={onClick} disabled={loading}>
       {loading
         ? <div style={{...s.miniSpin, borderTopColor: c.color}} />
         : <><span>{icon}</span><span>{label}</span></>
@@ -155,21 +194,26 @@ function ActionBtn({ label, icon, onClick, variant, loading }) {
 }
 
 const s = {
-  card: {
-    background:'var(--bg-elevated)', border:'1px solid var(--border)',
-    borderRadius:'var(--radius-lg)', overflow:'hidden',
-    transition:'border-color 0.2s, box-shadow 0.2s',
-  },
-  cardTop: { padding:'16px 16px 0' },
-  cardMain: {},
+  card: { background:'var(--bg-elevated)', border:'1px solid var(--border)', borderRadius:'var(--radius-lg)', overflow:'hidden', transition:'border-color 0.2s' },
+  cardTop: { padding:'14px 16px 0' },
   nameRow: { display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' },
-  statusDot: { width:'7px', height:'7px', borderRadius:'50%', flexShrink:0, transition:'box-shadow 0.3s' },
-  name: { flex:1, fontWeight:600, fontSize:'0.9em', color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
-  statePill: {
-    fontSize:'0.68em', fontWeight:600, padding:'2px 8px',
-    borderRadius:'20px', letterSpacing:'0.04em', flexShrink:0,
+  statusDot: { width:'7px', height:'7px', borderRadius:'50%', flexShrink:0 },
+  name: { flex:1, fontWeight:600, fontSize:'0.9em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+  statePill: { fontSize:'0.68em', fontWeight:600, padding:'2px 8px', borderRadius:'20px', letterSpacing:'0.04em', flexShrink:0 },
+  imageName: { fontSize:'0.72em', color:'var(--text-muted)', fontFamily:'var(--font-mono)', paddingLeft:'15px', marginBottom:'8px' },
+  metaRow: { display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', paddingLeft:'15px', paddingBottom:'10px', minHeight:'22px' },
+  uptimeBadge: { display:'flex', alignItems:'center', gap:'4px', fontSize:'0.72em', color:'var(--text-muted)', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'20px', padding:'2px 8px' },
+  uptimeIcon: { fontSize:'0.85em' },
+  portsRow: { display:'flex', gap:'4px', flexWrap:'wrap' },
+  portBadge: { fontSize:'0.7em', color:'var(--text-muted)', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'4px', padding:'2px 6px', fontFamily:'var(--font-mono)' },
+  portLink: {
+    display:'inline-flex', alignItems:'center', gap:'3px',
+    fontSize:'0.7em', color:'var(--brand-light)', background:'var(--brand-glow)',
+    border:'1px solid var(--border-focus)', borderRadius:'4px', padding:'2px 6px',
+    fontFamily:'var(--font-mono)', textDecoration:'none', transition:'all 0.15s',
   },
-  imageName: { fontSize:'0.72em', color:'var(--text-muted)', fontFamily:'var(--font-mono)', marginBottom:'10px', paddingLeft:'15px' },
+  portArrow: { fontSize:'0.8em' },
+  morePorts: { fontSize:'0.7em', color:'var(--text-muted)', padding:'2px 4px' },
   metricsRow: { display:'flex', gap:'1px', background:'var(--border)', borderTop:'1px solid var(--border)' },
   metric: { flex:1, padding:'10px 14px', background:'var(--bg-surface)' },
   metricHeader: { display:'flex', justifyContent:'space-between', marginBottom:'5px' },
@@ -177,40 +221,16 @@ const s = {
   metricValue: { fontSize:'0.78em', fontWeight:600, fontFamily:'var(--font-mono)' },
   barTrack: { height:'3px', background:'var(--border)', borderRadius:'2px', overflow:'hidden' },
   barFill: { height:'100%', borderRadius:'2px', transition:'width 0.5s ease' },
-  statusText: { padding:'6px 16px', fontSize:'0.72em', color:'var(--text-muted)', fontFamily:'var(--font-mono)', borderTop:'1px solid var(--border)' },
-  actions: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 16px 14px', gap:'8px' },
+  actions: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 16px 12px', gap:'8px' },
   actionsLeft: { display:'flex', gap:'6px' },
-  actionBtn: {
-    display:'flex', alignItems:'center', gap:'5px', padding:'5px 11px',
-    border:'1px solid', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-sans)',
-    fontSize:'0.78em', fontWeight:500, cursor:'pointer', transition:'all 0.15s',
-  },
-  logsToggle: {
-    padding:'5px 11px', border:'1px solid', borderRadius:'var(--radius-sm)',
-    fontFamily:'var(--font-sans)', fontSize:'0.78em', fontWeight:500,
-    cursor:'pointer', transition:'all 0.2s',
-  },
-  miniSpin: {
-    width:'11px', height:'11px', border:'2px solid transparent',
-    borderRadius:'50%', animation:'spin 0.7s linear infinite',
-  },
+  actionBtn: { display:'flex', alignItems:'center', gap:'5px', padding:'5px 11px', border:'1px solid', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-sans)', fontSize:'0.78em', fontWeight:500, cursor:'pointer', transition:'all 0.15s' },
+  logsToggle: { padding:'5px 11px', border:'1px solid', borderRadius:'var(--radius-sm)', fontFamily:'var(--font-sans)', fontSize:'0.78em', fontWeight:500, cursor:'pointer', transition:'all 0.2s' },
+  miniSpin: { width:'11px', height:'11px', border:'2px solid transparent', borderRadius:'50%', animation:'spin 0.7s linear infinite' },
   logsPanel: { borderTop:'1px solid var(--border)' },
-  logsTopBar: {
-    display:'flex', justifyContent:'space-between', alignItems:'center',
-    padding:'8px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)',
-  },
+  logsTopBar: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 14px', background:'var(--bg)', borderBottom:'1px solid var(--border)' },
   logsTitle: { fontSize:'0.75em', color:'var(--text-muted)', fontFamily:'var(--font-mono)' },
   logsIcon: { color:'var(--success)', marginRight:'6px' },
-  logsClose: {
-    background:'transparent', border:'none', color:'var(--text-muted)',
-    cursor:'pointer', fontSize:'0.85em', padding:'2px 6px', borderRadius:'3px',
-  },
-  logsBody: {
-    height:'200px', overflow:'auto', padding:'10px 14px',
-    background:'var(--bg)',
-  },
-  logLine: {
-    fontSize:'0.72em', fontFamily:'var(--font-mono)', color:'var(--text-secondary)',
-    whiteSpace:'pre-wrap', wordBreak:'break-all', lineHeight:1.6, marginBottom:'1px',
-  },
+  logsClose: { background:'transparent', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'0.85em', padding:'2px 6px', borderRadius:'3px' },
+  logsBody: { height:'200px', overflow:'auto', padding:'10px 14px', background:'var(--bg)' },
+  logLine: { fontSize:'0.72em', fontFamily:'var(--font-mono)', color:'var(--text-secondary)', whiteSpace:'pre-wrap', wordBreak:'break-all', lineHeight:1.6, marginBottom:'1px' },
 };
