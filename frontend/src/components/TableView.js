@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Terminal from './Terminal';
+import ContainerDetail from './ContainerDetail';
 
 const STATE_STYLE = {
   running:    { color:'var(--success)', bg:'var(--success-bg)', border:'var(--success-border)' },
@@ -26,7 +27,8 @@ export default function TableView({ containers, onAction }) {
   const [filter, setFilter]       = useState('all');
   const [sortKey, setSortKey]     = useState('name');
   const [sortDir, setSortDir]     = useState('asc');
-  const [terminal, setTerminal]   = useState(null);
+  const [terminal, setTerminal] = useState(null);
+  const [detail, setDetail] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
 
   const handleSort = (key) => {
@@ -65,6 +67,7 @@ export default function TableView({ containers, onAction }) {
   return (
     <div>
       {terminal && <Terminal container={terminal} onClose={() => setTerminal(null)} />}
+      {detail && <ContainerDetail container={detail} onClose={() => setDetail(null)} />}
 
       {/* Toolbar */}
       <div style={s.toolbar}>
@@ -117,7 +120,7 @@ export default function TableView({ containers, onAction }) {
 
                   {/* Nombre */}
                   <td style={s.td}>
-                    <div style={s.nameCell}>{c.name}</div>
+                    <div style={{...s.nameCell, cursor:'pointer', color:'var(--brand-light)'}} onClick={() => setDetail(c)}>{c.name}</div>
                     <div style={s.idCell}>{c.shortId}</div>
                   </td>
 

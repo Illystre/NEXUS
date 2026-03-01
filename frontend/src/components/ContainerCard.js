@@ -3,6 +3,7 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAuth } from '../AuthContext';
 import Terminal from './Terminal';
+import ContainerDetail from './ContainerDetail';
 
 const STATE = {
   running:    { color:'var(--success)', bg:'var(--success-bg)', border:'var(--success-border)', label:'Running' },
@@ -40,6 +41,7 @@ export default function ContainerCard({ container, onAction }) {
   const [stats, setStats] = useState(null);
   const [showLogs, setShowLogs] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
   const [logs, setLogs] = useState([]);
   const [actionLoading, setActionLoading] = useState(null);
   const logsEndRef = useRef(null);
@@ -86,12 +88,13 @@ export default function ContainerCard({ container, onAction }) {
   return (
     <>
       {showTerminal && <Terminal container={container} onClose={() => setShowTerminal(false)} />}
+      {showDetail && <ContainerDetail container={container} onClose={() => setShowDetail(false)} />}
 
       <div style={s.card}>
         <div style={s.cardTop}>
           <div style={s.nameRow}>
             <div style={{...s.statusDot, background: st.color, boxShadow: isRunning ? `0 0 0 3px ${st.color}25` : 'none'}} />
-            <div style={s.name}>{container.name}</div>
+            <div style={{...s.name, cursor:'pointer', textDecoration:'underline', textDecorationStyle:'dotted', textDecorationColor:'var(--border-hi)'}} onClick={() => setShowDetail(true)}>{container.name}</div>
             <div style={{...s.statePill, color: st.color, background: st.bg, border: `1px solid ${st.border}`}}>
               {st.label}
             </div>

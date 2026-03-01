@@ -156,5 +156,14 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── Container inspect ──────────────────────────────────────────────────────
+app.get("/api/containers/:id/inspect", authMiddleware, async (req, res) => {
+  try {
+    const container = docker.getContainer(req.params.id);
+    const data = await container.inspect();
+    res.json(data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));
