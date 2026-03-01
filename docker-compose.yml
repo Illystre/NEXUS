@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    container_name: docker-manager-backend
+    restart: unless-stopped
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-supersecret_changeme}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-admin123}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "3010:3001"
+    networks:
+      - dm-net
+
+  frontend:
+    build: ./frontend
+    container_name: docker-manager-frontend
+    restart: unless-stopped
+    ports:
+      - "9090:80"
+    depends_on:
+      - backend
+    networks:
+      - dm-net
+
+networks:
+  dm-net:
+    driver: bridge
