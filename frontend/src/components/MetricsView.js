@@ -135,7 +135,7 @@ export default function MetricsView({ containers }) {
           <div style={s.emptySub}>Las métricas se muestran solo para contenedores en estado Running</div>
         </div>
       ) : (
-        <div style={s.grid}>
+        <div className="nexus-metrics-grid" style={s.grid}>
           {filtered.map(c => <MetricCard key={c.id} container={c} />)}
         </div>
       )}

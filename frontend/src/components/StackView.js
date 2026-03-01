@@ -61,7 +61,7 @@ export default function StackView({ containers, onAction }) {
 
               {!isCollapsed && (
                 <div style={s.stackBody}>
-                  <div style={s.grid}>
+                  <div className="nexus-stack-grid" style={s.grid}>
                     {ctrs.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} />)}
                   </div>
                 </div>

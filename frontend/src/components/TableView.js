@@ -89,7 +89,7 @@ export default function TableView({ containers, onAction }) {
       </div>
 
       {/* Table */}
-      <div style={s.tableWrap}>
+      <div className="nexus-table-wrap" style={s.tableWrap}>
         <table style={s.table}>
           <thead>
             <tr style={s.thead}>

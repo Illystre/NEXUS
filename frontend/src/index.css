@@ -52,3 +52,84 @@ html, body {
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
 .fade-up { animation: fadeUp 0.3s ease forwards; }
+
+/* ── Sidebar overlay ───────────────────────────────────────────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 199;
+}
+
+/* ── Hamburger hidden on desktop ───────────────────────────────────────── */
+.hamburger { display: none !important; }
+
+/* ── Mobile ────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Sidebar: fixed, off-screen by default */
+  .nexus-sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    height: 100vh !important;
+    z-index: 200;
+    transform: translateX(-100%) !important;
+    transition: transform 0.25s ease !important;
+    box-shadow: 4px 0 24px #00000060;
+  }
+
+  /* Sidebar open state */
+  .nexus-sidebar.open {
+    transform: translateX(0) !important;
+  }
+
+  /* Show overlay when sidebar open */
+  .nexus-sidebar.open ~ .sidebar-overlay,
+  .sidebar-overlay.visible {
+    display: block !important;
+  }
+
+  /* Main takes full width */
+  .nexus-main {
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+
+  /* Show hamburger */
+  .hamburger {
+    display: flex !important;
+  }
+
+  /* Hide desktop metric pills */
+  .metric-pills-desktop {
+    display: none !important;
+  }
+
+  /* Content padding */
+  .nexus-content {
+    padding: 12px !important;
+  }
+
+  /* Single column grids */
+  .nexus-grid,
+  .nexus-stack-grid,
+  .nexus-metrics-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Table horizontal scroll */
+  .nexus-table-wrap {
+    overflow-x: auto !important;
+  }
+
+  /* Login: hide left panel */
+  .login-left {
+    display: none !important;
+  }
+
+  .login-right {
+    padding: 32px 20px !important;
+  }
+}

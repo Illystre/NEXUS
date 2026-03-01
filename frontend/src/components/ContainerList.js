@@ -31,7 +31,7 @@ export default function ContainerList({ containers, onAction }) {
         </div>
         <span style={s.count}>{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
       </div>
-      <div style={s.grid}>
+      <div className="nexus-grid" style={s.grid}>
         {filtered.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} />)}
         {filtered.length === 0 && <div style={s.empty}>No se encontraron contenedores</div>}
       </div>
