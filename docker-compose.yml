@@ -7,8 +7,10 @@ services:
       - JWT_SECRET=${JWT_SECRET:-supersecret_changeme}
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASS=${ADMIN_PASS:-admin123}
+      - SETTINGS_FILE=/data/settings.json
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nexus-data:/data
     ports:
       - "3010:3001"
     networks:
@@ -28,3 +30,6 @@ services:
 networks:
   dm-net:
     driver: bridge
+
+volumes:
+  nexus-data:

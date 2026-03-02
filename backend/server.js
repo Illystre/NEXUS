@@ -27,7 +27,7 @@ function authMiddleware(req, res, next) {
 
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  if (username !== ADMIN_USER || !bcrypt.compareSync(password, ADMIN_PASS_HASH))
+  if (username !== ADMIN_USER || !bcrypt.compareSync(password, global.RUNTIME_PASS_HASH || ADMIN_PASS_HASH))
     return res.status(401).json({ error: 'Credenciales incorrectas' });
   const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
   res.json({ token });
@@ -164,6 +164,73 @@ app.get("/api/containers/:id/inspect", authMiddleware, async (req, res) => {
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+const fs = require('fs');
+const SETTINGS_FILE = process.env.SETTINGS_FILE || '/data/settings.json';
+
+function loadSettings() {
+  try {
+    if (fs.existsSync(SETTINGS_FILE)) return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
+  } catch {}
+  return { theme: 'dark', accent: '#4f78ff', refreshInterval: 5000, telegram: { token: '', chatId: '' } };
+}
+
+function saveSettings(data) {
+  const dir = require('path').dirname(SETTINGS_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2));
+}
+
+app.get('/api/settings', authMiddleware, (req, res) => {
+  res.json(loadSettings());
+});
+
+app.put('/api/settings', authMiddleware, (req, res) => {
+  const current = loadSettings();
+  const updated = { ...current, ...req.body };
+  // Don't allow overwriting telegram token with masked value
+  if (req.body.telegram?.token === '••••••••') updated.telegram.token = current.telegram?.token || '';
+  saveSettings(updated);
+  res.json(updated);
+});
+
+app.post('/api/settings/change-password', authMiddleware, (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!bcrypt.compareSync(currentPassword, ADMIN_PASS_HASH))
+    return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+  if (!newPassword || newPassword.length < 6)
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+  // Update in-memory hash (persists until restart — for full persistence use settings file)
+  const newHash = bcrypt.hashSync(newPassword, 10);
+  // Store new hash in settings
+  const s = loadSettings();
+  s._passwordHash = newHash;
+  saveSettings(s);
+  // Update runtime hash
+  global.RUNTIME_PASS_HASH = newHash;
+  res.json({ ok: true });
+});
+
+app.post('/api/settings/test-telegram', authMiddleware, async (req, res) => {
+  const { token, chatId } = req.body;
+  if (!token || !chatId) return res.status(400).json({ error: 'Token y Chat ID requeridos' });
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: '✅ NEXUS conectado correctamente a Telegram!' })
+    });
+    const data = await response.json();
+    if (data.ok) res.json({ ok: true });
+    else res.status(400).json({ error: data.description || 'Error de Telegram' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));

@@ -5,6 +5,40 @@ import ContainerList from './ContainerList';
 import StackView from './StackView';
 import MetricsView from './MetricsView';
 import TableView from './TableView';
+import SettingsView from './SettingsView';
+
+function applyTheme(settings) {
+  if (!settings) return;
+  const root = document.documentElement;
+  // Accent color
+  const accent = settings.accent || '#4f78ff';
+  root.style.setProperty('--brand', accent);
+  root.style.setProperty('--brand-glow', accent + '20');
+  root.style.setProperty('--border-focus', accent + '80');
+  // Derive lighter version
+  root.style.setProperty('--brand-light', accent);
+
+  // Theme
+  if (settings.theme === 'light') {
+    root.style.setProperty('--bg',          '#f8fafc');
+    root.style.setProperty('--bg-surface',  '#ffffff');
+    root.style.setProperty('--bg-elevated', '#f1f5f9');
+    root.style.setProperty('--border',      '#e2e8f0');
+    root.style.setProperty('--border-hi',   '#cbd5e1');
+    root.style.setProperty('--text-primary',   '#0f172a');
+    root.style.setProperty('--text-secondary', '#475569');
+    root.style.setProperty('--text-muted',     '#94a3b8');
+  } else {
+    root.style.setProperty('--bg',          '#0f1117');
+    root.style.setProperty('--bg-surface',  '#161b27');
+    root.style.setProperty('--bg-elevated', '#1c2333');
+    root.style.setProperty('--border',      '#252d3d');
+    root.style.setProperty('--border-hi',   '#2e3a52');
+    root.style.setProperty('--text-primary',   '#f1f5f9');
+    root.style.setProperty('--text-secondary', '#8b9ab4');
+    root.style.setProperty('--text-muted',     '#4a5568');
+  }
+}
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -14,6 +48,23 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settings, setSettings] = useState(null);
+  const [refreshInterval, setRefreshInterval] = useState(5000);
+
+  // Load settings on mount
+  useEffect(() => {
+    axios.get('/api/settings').then(r => {
+      setSettings(r.data);
+      applyTheme(r.data);
+      if (r.data.refreshInterval) setRefreshInterval(r.data.refreshInterval);
+    }).catch(() => {});
+  }, []);
+
+  const handleSettingsChange = (newSettings) => {
+    setSettings(newSettings);
+    applyTheme(newSettings);
+    if (newSettings.refreshInterval) setRefreshInterval(newSettings.refreshInterval);
+  };
 
   const fetchAll = useCallback(async () => {
     try {
@@ -25,7 +76,11 @@ export default function Dashboard() {
     finally { setLoading(false); }
   }, [logout]);
 
-  useEffect(() => { fetchAll(); const i = setInterval(fetchAll, 5000); return () => clearInterval(i); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+    const i = setInterval(fetchAll, refreshInterval);
+    return () => clearInterval(i);
+  }, [fetchAll, refreshInterval]);
 
   const handleAction = async (id, action) => {
     await axios.post(`/api/containers/${id}/${action}`);
@@ -37,46 +92,47 @@ export default function Dashboard() {
   const stacks  = [...new Set(containers.map(c => c.stack).filter(Boolean))].length;
 
   const NAV = [
-    { id:'stacks',  icon:'⊞', label:'Stacks' },
-    { id:'table',   icon:'≡', label:'Tabla compacta' },
-    { id:'all',     icon:'▦', label:'Tarjetas' },
-    { id:'metrics', icon:'◈', label:'Métricas' },
+    { id:'stacks',   icon:'⊞', label:'Stacks' },
+    { id:'table',    icon:'≡', label:'Tabla compacta' },
+    { id:'all',      icon:'▦', label:'Tarjetas' },
+    { id:'metrics',  icon:'◈', label:'Métricas' },
+    { id:'settings', icon:'⚙', label:'Ajustes' },
   ];
 
   const handleNavClick = (id) => { setTab(id); setSidebarOpen(false); };
 
   return (
     <div style={s.shell}>
+      <div className={`sidebar-overlay${sidebarOpen ? ' visible' : ''}`} onClick={() => setSidebarOpen(false)} />
 
-      {/* Overlay — tap to close sidebar on mobile */}
-      <div
-        className={`sidebar-overlay${sidebarOpen ? ' visible' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-
-      {/* Sidebar */}
       <aside className={`nexus-sidebar${sidebarOpen ? ' open' : ''}`} style={s.sidebar}>
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoMark}>
               <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
-                <rect x="2" y="2" width="11" height="11" rx="2" fill="#4f78ff"/>
-                <rect x="15" y="2" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-                <rect x="2" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-                <rect x="15" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.25"/>
+                <rect x="2" y="2" width="11" height="11" rx="2" fill="var(--brand)"/>
+                <rect x="15" y="2" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.5"/>
+                <rect x="2" y="15" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.5"/>
+                <rect x="15" y="15" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.25"/>
               </svg>
             </div>
             <span style={s.logoText}>NEXUS</span>
           </div>
           <nav style={s.nav}>
             <div style={s.navSection}>VISTAS</div>
-            {NAV.map(n => (
+            {NAV.filter(n => n.id !== 'settings').map(n => (
               <button key={n.id} style={{...s.navItem, ...(tab===n.id ? s.navItemActive:{})}} onClick={() => handleNavClick(n.id)}>
                 <span style={s.navIcon}>{n.icon}</span>
                 <span>{n.label}</span>
                 {tab===n.id && <span style={s.navActiveBar} />}
               </button>
             ))}
+            <div style={{...s.navSection, marginTop:'8px'}}>CUENTA</div>
+            <button style={{...s.navItem, ...(tab==='settings' ? s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
+              <span style={s.navIcon}>⚙</span>
+              <span>Ajustes</span>
+              {tab==='settings' && <span style={s.navActiveBar} />}
+            </button>
           </nav>
         </div>
         <div style={s.sidebarBottom}>
@@ -98,49 +154,42 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main content */}
       <div className="nexus-main" style={s.main}>
         <header style={s.topbar}>
           <div style={s.topbarLeft}>
-            {/* Hamburger — only visible on mobile via CSS */}
-            <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>
-              ☰
-            </button>
+            <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
             <h1 style={s.pageTitle}>{NAV.find(n=>n.id===tab)?.label}</h1>
-            {lastRefresh && (
-              <span style={s.refreshBadge}>
-                <span style={s.refreshDot} />
-                {lastRefresh.toLocaleTimeString('es-ES')}
-              </span>
+            {lastRefresh && tab !== 'settings' && (
+              <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString('es-ES')}</span>
             )}
           </div>
           <div style={s.topbarRight}>
-            {/* Desktop pills */}
-            <div className="metric-pills-desktop" style={s.metricPills}>
-              {[{dot:'var(--success)',num:running,lbl:'running'},{dot:'var(--danger)',num:stopped,lbl:'stopped'},{dot:'var(--brand)',num:stacks,lbl:'stacks'}].map(m => (
-                <div key={m.lbl} style={s.metricPill}>
-                  <span style={{...s.dot, background:m.dot}} />
-                  <span style={s.metricNum}>{m.num}</span>
-                  <span style={s.metricLbl}>{m.lbl}</span>
+            {tab !== 'settings' && (
+              <>
+                <div className="metric-pills-desktop" style={s.metricPills}>
+                  {[{dot:'var(--success)',num:running,lbl:'running'},{dot:'var(--danger)',num:stopped,lbl:'stopped'},{dot:'var(--brand)',num:stacks,lbl:'stacks'}].map(m => (
+                    <div key={m.lbl} style={s.metricPill}>
+                      <span style={{...s.dot, background:m.dot}} />
+                      <span style={s.metricNum}>{m.num}</span>
+                      <span style={s.metricLbl}>{m.lbl}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            {/* Mobile: just running count */}
-            <span style={s.mobileRunning}>
-              <span style={{...s.dot, background:'var(--success)'}} />
-              {running}
-            </span>
-            <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
+                <span style={s.mobileRunning}><span style={{...s.dot, background:'var(--success)'}} />{running}</span>
+                <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
+              </>
+            )}
           </div>
         </header>
 
         <div className="nexus-content" style={s.content}>
-          {loading ? <Loader /> : (
+          {loading && tab !== 'settings' ? <Loader /> : (
             <div key={tab} className="fade-up">
-              {tab==='stacks'  && <StackView   containers={containers} onAction={handleAction} />}
-              {tab==='table'   && <TableView   containers={containers} onAction={handleAction} />}
-              {tab==='all'     && <ContainerList containers={containers} onAction={handleAction} />}
-              {tab==='metrics' && <MetricsView containers={containers} />}
+              {tab==='stacks'   && <StackView   containers={containers} onAction={handleAction} />}
+              {tab==='table'    && <TableView   containers={containers} onAction={handleAction} />}
+              {tab==='all'      && <ContainerList containers={containers} onAction={handleAction} />}
+              {tab==='metrics'  && <MetricsView containers={containers} />}
+              {tab==='settings' && <SettingsView onSettingsChange={handleSettingsChange} />}
             </div>
           )}
         </div>
