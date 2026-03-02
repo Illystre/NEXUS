@@ -69,7 +69,8 @@ app.get('/api/containers/:id/stats', authMiddleware, async (req, res) => {
 app.post('/api/containers/:id/:action', authMiddleware, async (req, res) => {
   const { id, action } = req.params;
   if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Acción no permitida' });
-  try { await docker.getContainer(id)[action](); res.json({ ok: true }); }
+  try { if (action === 'stop') markManualStop(id);
+    await docker.getContainer(id)[action](); res.json({ ok: true }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -229,6 +230,83 @@ app.post('/api/settings/test-telegram', authMiddleware, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+
+
+// ── Alert system ─────────────────────────────────────────────────────────────
+const containerStates = new Map();   // id → { state, name, manualStop: bool }
+const alerts = [];                   // { id, containerId, name, from, to, ts }
+let alertSeq = 0;
+
+// Mark a container as manually stopped (called from action endpoint)
+function markManualStop(id) {
+  const s = containerStates.get(id);
+  if (s) s.manualStop = true;
+}
+
+// Poll containers and emit alerts
+async function pollContainerAlerts() {
+  try {
+    const containers = await docker.listContainers({ all: true });
+    for (const c of containers) {
+      const id = c.Id;
+      const name = c.Names[0]?.replace('/', '') || id.substring(0, 12);
+      const state = c.State;
+      const prev = containerStates.get(id);
+
+      if (prev) {
+        const wasRunning = prev.state === 'running';
+        const isRunning  = state === 'running';
+
+        // Detect unexpected stop
+        if (wasRunning && !isRunning && !prev.manualStop) {
+          const alert = {
+            id: ++alertSeq,
+            containerId: id,
+            name,
+            from: 'running',
+            to: state,
+            ts: new Date().toISOString(),
+            read: false,
+          };
+          alerts.unshift(alert);
+          if (alerts.length > 100) alerts.pop();
+          // Broadcast to all connected sockets
+          io.emit('alert:new', alert);
+        }
+
+        // Reset manualStop flag once container is running again
+        if (isRunning) prev.manualStop = false;
+        prev.state = state;
+      } else {
+        containerStates.set(id, { state, name, manualStop: false });
+      }
+    }
+    // Remove entries for containers that no longer exist
+    const ids = new Set(containers.map(c => c.Id));
+    for (const id of containerStates.keys()) {
+      if (!ids.has(id)) containerStates.delete(id);
+    }
+  } catch {}
+}
+
+setInterval(pollContainerAlerts, 5000);
+pollContainerAlerts();
+
+// Alerts endpoints
+app.get('/api/alerts', authMiddleware, (req, res) => {
+  res.json(alerts);
+});
+
+app.post('/api/alerts/read-all', authMiddleware, (req, res) => {
+  alerts.forEach(a => a.read = true);
+  res.json({ ok: true });
+});
+
+app.delete('/api/alerts', authMiddleware, (req, res) => {
+  alerts.length = 0;
+  res.json({ ok: true });
 });
 
 

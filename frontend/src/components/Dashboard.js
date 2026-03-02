@@ -6,6 +6,7 @@ import StackView from './StackView';
 import MetricsView from './MetricsView';
 import TableView from './TableView';
 import SettingsView from './SettingsView';
+import AlertPanel from './AlertPanel';
 
 function applyTheme(settings) {
   if (!settings) return;
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [refreshInterval, setRefreshInterval] = useState(5000);
 
   // Load settings on mount
@@ -131,6 +133,7 @@ export default function Dashboard() {
             <button style={{...s.navItem, ...(tab==='settings' ? s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
               <span style={s.navIcon}>⚙</span>
               <span>Ajustes</span>
+              {unreadAlerts > 0 && <span style={{background:'var(--danger)',color:'white',fontSize:'0.65em',fontWeight:700,borderRadius:'20px',padding:'1px 6px',marginLeft:'auto'}}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>}
               {tab==='settings' && <span style={s.navActiveBar} />}
             </button>
           </nav>
@@ -176,6 +179,7 @@ export default function Dashboard() {
                   ))}
                 </div>
                 <span style={s.mobileRunning}><span style={{...s.dot, background:'var(--success)'}} />{running}</span>
+                <AlertPanel onUnreadChange={setUnreadAlerts} />
                 <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
               </>
             )}
