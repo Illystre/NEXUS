@@ -21,6 +21,12 @@ const USERS_FILE    = path.join(DATA_DIR, 'users.json');
 app.use(cors());
 app.use(express.json());
 
+// Serve frontend static files in production (unified image)
+const PUBLIC_DIR = path.join(__dirname, 'public');
+if (require('fs').existsSync(PUBLIC_DIR)) {
+  app.use(express.static(PUBLIC_DIR));
+}
+
 // ── Persistence helpers ──────────────────────────────────────────────────────
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -127,6 +133,8 @@ app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
   try { res.json(await docker.getContainer(req.params.id).inspect()); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
@@ -329,6 +337,15 @@ io.on('connection', (socket) => {
     for (const [key, stream] of activeExecSessions) { if (key.startsWith(socket.id)) { stream.end(); activeExecSessions.delete(key); } }
   });
 });
+
+// SPA fallback
+if (require('fs').existsSync(path.join(__dirname, 'public', 'index.html'))) {
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+      res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    }
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));

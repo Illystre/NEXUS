@@ -1,72 +1,155 @@
-# ⬡ Docker Manager
+<div align="center">
 
-Panel web para gestionar tus contenedores Docker: ver estado, métricas en tiempo real, logs y control start/stop/restart.
+<img src="https://raw.githubusercontent.com/placeholder/nexus/main/docs/logo.svg" width="64" height="64" alt="NEXUS Logo">
 
-## 🚀 Instalación
+# NEXUS Container Platform
 
-### 1. Configura credenciales
+**A lightweight, beautiful Docker management panel — built as an alternative to Portainer.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
+
+![NEXUS Dashboard Preview](https://raw.githubusercontent.com/placeholder/nexus/main/docs/preview.png)
+
+</div>
+
+---
+
+## ✨ Features
+
+- **📊 Real-time metrics** — CPU & RAM per container with 60s sparkline history
+- **🗂 Stack view** — containers grouped by docker-compose project with health status
+- **📋 Compact table** — dense `docker ps`-style view with sortable columns
+- **⌨ Integrated terminal** — `docker exec` shell directly from the browser
+- **🔍 Container detail** — full inspect: networks, volumes, env vars, raw JSON
+- **🔔 Crash alerts** — real-time notifications when a container stops unexpectedly
+- **📝 Event history** — full audit log: actions, logins, config changes
+- **👥 Multi-user** — Admin and Viewer roles, manage users from the UI
+- **🎨 Themeable** — dark/light mode + custom accent color
+- **📱 PWA + Mobile** — installable as desktop/mobile app, fully responsive
+- **🔒 JWT auth** — secure token-based authentication
+
+---
+
+## 🚀 Quick Start
+
+**One command install:**
+
 ```bash
+docker run -d \
+  --name nexus \
+  -p 9090:3001 \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v nexus-data:/data \
+  -e ADMIN_USER=admin \
+  -e ADMIN_PASS=yourpassword \
+  -e JWT_SECRET=your_secret_key \
+  --restart unless-stopped \
+  ghcr.io/alvaro-lab/nexus:latest
+```
+
+Then open: **http://localhost:9090**
+
+---
+
+## 🐳 Docker Compose
+
+```yaml
+services:
+  nexus:
+    image: ghcr.io/alvaro-lab/nexus:latest
+    container_name: nexus
+    restart: unless-stopped
+    ports:
+      - "9090:3001"
+    environment:
+      - ADMIN_USER=admin
+      - ADMIN_PASS=yourpassword
+      - JWT_SECRET=your_secret_key_here
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nexus-data:/data
+
+volumes:
+  nexus-data:
+```
+
+---
+
+## 🔧 Build from source
+
+```bash
+git clone https://github.com/alvaro-lab/nexus.git
+cd nexus
+
+# Configure
 cp .env.example .env
-```
-Edita `.env`:
-```
-JWT_SECRET=una_clave_secreta_larga
-ADMIN_USER=tu_usuario
-ADMIN_PASS=tu_contraseña
-```
+# Edit .env with your credentials
 
-### 2. Levanta los contenedores
-```bash
+# Run (single container)
 docker-compose up --build -d
-```
 
-### 3. Abre el panel
-```
-http://localhost:9090
-```
-
----
-
-## 🔧 Funciones
-
-- **Vista por Stacks** — contenedores agrupados por proyecto docker-compose, colapsables
-- **Vista plana** — todos los contenedores con búsqueda y filtros
-- **Métricas en tiempo real** — CPU % y RAM por contenedor (actualización cada 3s)
-- **Logs en vivo** — streaming de logs via WebSocket, últimas 500 líneas
-- **Control** — Start, Stop, Restart por contenedor
-- **Auth JWT** — login con usuario/contraseña, sesión de 24h
-
----
-
-## 🏗️ Estructura
-
-```
-docker-manager/
-├── backend/
-│   ├── server.js         # Express + Socket.io + Dockerode
-│   ├── package.json
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── App.js
-│   │   ├── AuthContext.js
-│   │   └── components/
-│   │       ├── Login.js
-│   │       ├── Dashboard.js
-│   │       ├── InfoBar.js
-│   │       ├── StackView.js
-│   │       ├── ContainerList.js
-│   │       └── ContainerCard.js
-│   ├── nginx.conf
-│   └── Dockerfile
-├── docker-compose.yml
-└── .env.example
+# Run (development mode, hot reload)
+docker-compose -f docker-compose.dev.yml up --build -d
 ```
 
 ---
 
-## ⚠️ Notas de seguridad
+## ⚙️ Environment Variables
 
-- El backend monta `/var/run/docker.sock` en **modo lectura** para las consultas, pero necesita escritura para start/stop/restart. Si quieres máxima seguridad, usa un proxy como `docker-socket-proxy`.
-- Cambia siempre `JWT_SECRET` y `ADMIN_PASS` por valores seguros.
-- No expongas el puerto al exterior sin HTTPS.
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_USER` | `admin` | Initial admin username |
+| `ADMIN_PASS` | `admin123` | Initial admin password |
+| `JWT_SECRET` | `changeme` | Secret for JWT signing — **change this!** |
+| `PORT` | `3001` | Backend port |
+| `DATA_DIR` | `/data` | Path for persistent data (users, settings) |
+
+> **Note:** After first run, users are stored in `/data/users.json`. You can manage them from the UI (Settings → Users).
+
+---
+
+## 🧭 Roadmap
+
+- [ ] Telegram notifications on container crash
+- [ ] Resource limits per container from UI
+- [ ] Image manager (pull, remove, inspect)
+- [ ] Docker network manager
+- [ ] 2FA for admin accounts
+
+---
+
+## 📸 Screenshots
+
+| Stacks view | Metrics with sparklines |
+|---|---|
+| ![Stacks](docs/stacks.png) | ![Metrics](docs/metrics.png) |
+
+| Terminal | Settings |
+|---|---|
+| ![Terminal](docs/terminal.png) | ![Settings](docs/settings.png) |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to open issues or pull requests.
+
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feat/my-feature`
+3. Commit your changes: `git commit -m 'feat: add my feature'`
+4. Push and open a PR
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 alvaro_lab
+
+---
+
+<div align="center">
+  <sub>Built with ❤️ as a lightweight alternative to Portainer</sub>
+</div>
