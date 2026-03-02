@@ -1,6 +1,5 @@
 services:
   nexus:
-    image: nexus-container-platform
     build: .
     container_name: nexus
     restart: unless-stopped

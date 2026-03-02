@@ -35,22 +35,17 @@
 
 ## 🚀 Quick Start
 
-**One command install:**
+**Install in 3 commands:**
 
 ```bash
-docker run -d \
-  --name nexus \
-  -p 9090:3001 \
-  -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -v nexus-data:/data \
-  -e ADMIN_USER=admin \
-  -e ADMIN_PASS=yourpassword \
-  -e JWT_SECRET=your_secret_key \
-  --restart unless-stopped \
-  ghcr.io/alvaro-lab/nexus:latest
+git clone https://github.com/Alvarito1983/NEXUS.git
+cd NEXUS
+docker compose up --build -d
 ```
 
 Then open: **http://localhost:9090**
+
+Default credentials: `admin` / `admin123`
 
 ---
 
@@ -59,7 +54,7 @@ Then open: **http://localhost:9090**
 ```yaml
 services:
   nexus:
-    image: ghcr.io/alvaro-lab/nexus:latest
+    build: .
     container_name: nexus
     restart: unless-stopped
     ports:
