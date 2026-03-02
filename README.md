@@ -33,19 +33,34 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (recommended)
 
-**Install in 3 commands:**
+No need to clone the repo. Just run these 3 commands on any machine with Docker:
 
 ```bash
-git clone https://github.com/Alvarito1983/NEXUS.git
-cd NEXUS
-docker compose up --build -d
+# 1. Download the docker-compose.yml
+curl -O https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docker-compose.yml
+
+# 2. Create your .env file
+curl -O https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/.env.example
+cp .env.example .env
+# Edit .env with your own credentials (nano .env or any editor)
+
+# 3. Start
+docker compose up -d
 ```
 
 Then open: **http://localhost:9090**
 
-Default credentials: `admin` / `admin123`
+Default credentials: `admin` / `admin123` *(change these in your `.env`)*
+
+### 🔄 Update to latest version
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+That's it — no git clone needed, ever.
 
 ---
 
@@ -54,7 +69,7 @@ Default credentials: `admin` / `admin123`
 ```yaml
 services:
   nexus:
-    build: .
+    image: ghcr.io/alvarito1983/nexus:latest
     container_name: nexus
     restart: unless-stopped
     ports:
@@ -76,18 +91,18 @@ volumes:
 ## 🔧 Build from source
 
 ```bash
-git clone https://github.com/alvaro-lab/nexus.git
-cd nexus
+git clone https://github.com/Alvarito1983/NEXUS.git
+cd NEXUS
 
 # Configure
 cp .env.example .env
 # Edit .env with your credentials
 
 # Run (single container)
-docker-compose up --build -d
+docker compose up --build -d
 
 # Run (development mode, hot reload)
-docker-compose -f docker-compose.dev.yml up --build -d
+docker compose -f docker-compose.dev.yml up --build -d
 ```
 
 ---
@@ -97,7 +112,7 @@ docker-compose -f docker-compose.dev.yml up --build -d
 | Variable | Default | Description |
 |---|---|---|
 | `ADMIN_USER` | `admin` | Initial admin username |
-| `ADMIN_PASS` | `admin123` | Initial admin password |
+| `ADMIN_PASS` | `admin123` | Initial admin password — **change this!** |
 | `JWT_SECRET` | `changeme` | Secret for JWT signing — **change this!** |
 | `PORT` | `3001` | Backend port |
 | `DATA_DIR` | `/data` | Path for persistent data (users, settings) |
