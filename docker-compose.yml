@@ -1,6 +1,6 @@
 services:
   nexus:
-    build: .
+    image: ghcr.io/alvarito1983/nexus:latest
     container_name: nexus
     restart: unless-stopped
     ports:
@@ -12,6 +12,5 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - nexus-data:/data
-
 volumes:
   nexus-data:
