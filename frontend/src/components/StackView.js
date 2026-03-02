@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ContainerCard from './ContainerCard';
 
-export default function StackView({ containers, onAction }) {
+export default function StackView({ containers, onAction, isViewer }) {
   const [collapsed, setCollapsed] = useState({});
   const [search, setSearch] = useState('');
 
@@ -62,7 +62,7 @@ export default function StackView({ containers, onAction }) {
               {!isCollapsed && (
                 <div style={s.stackBody}>
                   <div className="nexus-stack-grid" style={s.grid}>
-                    {ctrs.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} />)}
+                    {ctrs.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} isViewer={isViewer} />)}
                   </div>
                 </div>
               )}

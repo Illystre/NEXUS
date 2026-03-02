@@ -22,7 +22,7 @@ function fmtUptime(status) {
   return status.split(' ').slice(0,3).join(' ');
 }
 
-export default function TableView({ containers, onAction }) {
+export default function TableView({ containers, onAction, isViewer }) {
   const [search, setSearch]       = useState('');
   const [filter, setFilter]       = useState('all');
   const [sortKey, setSortKey]     = useState('name');
@@ -165,9 +165,9 @@ export default function TableView({ containers, onAction }) {
                   {/* Acciones */}
                   <td style={s.td}>
                     <div style={s.actionsCell}>
-                      {isRunning
+                      {!isViewer && (isRunning
                         ? <TBtn label="Stop" color="var(--danger)" loading={actionLoading===c.id+'stop'} onClick={() => doAction(c.id,'stop')} />
-                        : <TBtn label="Start" color="var(--success)" loading={actionLoading===c.id+'start'} onClick={() => doAction(c.id,'start')} />
+                        : <TBtn label="Start" color="var(--success)" loading={actionLoading===c.id+'start'} onClick={() => doAction(c.id,'start')} />)
                       }
                       <TBtn label="↺" color="var(--text-secondary)" loading={actionLoading===c.id+'restart'} onClick={() => doAction(c.id,'restart')} />
                       {isRunning && (

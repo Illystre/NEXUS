@@ -6,85 +6,74 @@ import StackView from './StackView';
 import MetricsView from './MetricsView';
 import TableView from './TableView';
 import SettingsView from './SettingsView';
+import EventsView from './EventsView';
 import AlertPanel from './AlertPanel';
 
 function applyTheme(settings) {
   if (!settings) return;
   const root = document.documentElement;
-  // Accent color
   const accent = settings.accent || '#4f78ff';
   root.style.setProperty('--brand', accent);
   root.style.setProperty('--brand-glow', accent + '20');
   root.style.setProperty('--border-focus', accent + '80');
-  // Derive lighter version
   root.style.setProperty('--brand-light', accent);
-
-  // Theme
   if (settings.theme === 'light') {
-    root.style.setProperty('--bg',          '#f8fafc');
-    root.style.setProperty('--bg-surface',  '#ffffff');
-    root.style.setProperty('--bg-elevated', '#f1f5f9');
-    root.style.setProperty('--border',      '#e2e8f0');
-    root.style.setProperty('--border-hi',   '#cbd5e1');
-    root.style.setProperty('--text-primary',   '#0f172a');
-    root.style.setProperty('--text-secondary', '#475569');
-    root.style.setProperty('--text-muted',     '#94a3b8');
+    root.style.setProperty('--bg',           '#f8fafc');
+    root.style.setProperty('--bg-surface',   '#ffffff');
+    root.style.setProperty('--bg-elevated',  '#f1f5f9');
+    root.style.setProperty('--border',       '#e2e8f0');
+    root.style.setProperty('--border-hi',    '#cbd5e1');
+    root.style.setProperty('--text-primary',    '#0f172a');
+    root.style.setProperty('--text-secondary',  '#475569');
+    root.style.setProperty('--text-muted',      '#94a3b8');
   } else {
-    root.style.setProperty('--bg',          '#0f1117');
-    root.style.setProperty('--bg-surface',  '#161b27');
-    root.style.setProperty('--bg-elevated', '#1c2333');
-    root.style.setProperty('--border',      '#252d3d');
-    root.style.setProperty('--border-hi',   '#2e3a52');
-    root.style.setProperty('--text-primary',   '#f1f5f9');
-    root.style.setProperty('--text-secondary', '#8b9ab4');
-    root.style.setProperty('--text-muted',     '#4a5568');
+    root.style.setProperty('--bg',           '#0f1117');
+    root.style.setProperty('--bg-surface',   '#161b27');
+    root.style.setProperty('--bg-elevated',  '#1c2333');
+    root.style.setProperty('--border',       '#252d3d');
+    root.style.setProperty('--border-hi',    '#2e3a52');
+    root.style.setProperty('--text-primary',    '#f1f5f9');
+    root.style.setProperty('--text-secondary',  '#8b9ab4');
+    root.style.setProperty('--text-muted',      '#4a5568');
   }
 }
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
-  const [tab, setTab] = useState('stacks');
+  const { user, role, logout } = useAuth();
+  const [tab, setTab]           = useState('stacks');
   const [containers, setContainers] = useState([]);
-  const [info, setInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [info, setInfo]         = useState(null);
+  const [loading, setLoading]   = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settings, setSettings] = useState(null);
-  const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [refreshInterval, setRefreshInterval] = useState(5000);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
 
-  // Load settings on mount
+  const isViewer = role === 'viewer';
+  const isAdmin  = role === 'admin';
+
   useEffect(() => {
     axios.get('/api/settings').then(r => {
-      setSettings(r.data);
-      applyTheme(r.data);
+      setSettings(r.data); applyTheme(r.data);
       if (r.data.refreshInterval) setRefreshInterval(r.data.refreshInterval);
     }).catch(() => {});
   }, []);
 
-  const handleSettingsChange = (newSettings) => {
-    setSettings(newSettings);
-    applyTheme(newSettings);
-    if (newSettings.refreshInterval) setRefreshInterval(newSettings.refreshInterval);
-  };
+  const handleSettingsChange = (s) => { setSettings(s); applyTheme(s); if (s.refreshInterval) setRefreshInterval(s.refreshInterval); };
 
   const fetchAll = useCallback(async () => {
     try {
       const [cRes, iRes] = await Promise.all([axios.get('/api/containers'), axios.get('/api/info')]);
-      setContainers(cRes.data);
-      setInfo(iRes.data);
-      setLastRefresh(new Date());
+      setContainers(cRes.data); setInfo(iRes.data); setLastRefresh(new Date());
     } catch(e) { if (e.response?.status === 401) logout(); }
     finally { setLoading(false); }
   }, [logout]);
 
-  useEffect(() => {
-    fetchAll();
-    const i = setInterval(fetchAll, refreshInterval);
-    return () => clearInterval(i);
-  }, [fetchAll, refreshInterval]);
+  useEffect(() => { fetchAll(); const i = setInterval(fetchAll, refreshInterval); return () => clearInterval(i); }, [fetchAll, refreshInterval]);
 
   const handleAction = async (id, action) => {
+    if (isViewer) return;
     await axios.post(`/api/containers/${id}/${action}`);
     setTimeout(fetchAll, 800);
   };
@@ -93,21 +82,21 @@ export default function Dashboard() {
   const stopped = containers.filter(c => c.state !== 'running').length;
   const stacks  = [...new Set(containers.map(c => c.stack).filter(Boolean))].length;
 
-  const NAV = [
-    { id:'stacks',   icon:'⊞', label:'Stacks' },
-    { id:'table',    icon:'≡', label:'Tabla compacta' },
-    { id:'all',      icon:'▦', label:'Tarjetas' },
-    { id:'metrics',  icon:'◈', label:'Métricas' },
-    { id:'settings', icon:'⚙', label:'Ajustes' },
+  const NAV_MAIN = [
+    { id:'stacks',  icon:'⊞', label:'Stacks' },
+    { id:'table',   icon:'≡', label:'Tabla compacta' },
+    { id:'all',     icon:'▦', label:'Tarjetas' },
+    { id:'metrics', icon:'◈', label:'Métricas' },
+    { id:'events',  icon:'📋', label:'Eventos' },
   ];
 
   const handleNavClick = (id) => { setTab(id); setSidebarOpen(false); };
 
   return (
     <div style={s.shell}>
-      <div className={`sidebar-overlay${sidebarOpen ? ' visible' : ''}`} onClick={() => setSidebarOpen(false)} />
+      <div className={`sidebar-overlay${sidebarOpen?' visible':''}`} onClick={() => setSidebarOpen(false)} />
 
-      <aside className={`nexus-sidebar${sidebarOpen ? ' open' : ''}`} style={s.sidebar}>
+      <aside className={`nexus-sidebar${sidebarOpen?' open':''}`} style={s.sidebar}>
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoMark}>
@@ -122,18 +111,20 @@ export default function Dashboard() {
           </div>
           <nav style={s.nav}>
             <div style={s.navSection}>VISTAS</div>
-            {NAV.filter(n => n.id !== 'settings').map(n => (
-              <button key={n.id} style={{...s.navItem, ...(tab===n.id ? s.navItemActive:{})}} onClick={() => handleNavClick(n.id)}>
+            {NAV_MAIN.map(n => (
+              <button key={n.id} style={{...s.navItem, ...(tab===n.id?s.navItemActive:{})}} onClick={() => handleNavClick(n.id)}>
                 <span style={s.navIcon}>{n.icon}</span>
                 <span>{n.label}</span>
                 {tab===n.id && <span style={s.navActiveBar} />}
               </button>
             ))}
             <div style={{...s.navSection, marginTop:'8px'}}>CUENTA</div>
-            <button style={{...s.navItem, ...(tab==='settings' ? s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
+            <button style={{...s.navItem, ...(tab==='settings'?s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
               <span style={s.navIcon}>⚙</span>
               <span>Ajustes</span>
-              {unreadAlerts > 0 && <span style={{background:'var(--danger)',color:'white',fontSize:'0.65em',fontWeight:700,borderRadius:'20px',padding:'1px 6px',marginLeft:'auto'}}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>}
+              {unreadAlerts > 0 && (
+                <span style={s.alertBadge}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
+              )}
               {tab==='settings' && <span style={s.navActiveBar} />}
             </button>
           </nav>
@@ -150,7 +141,12 @@ export default function Dashboard() {
             <div style={s.userAvatar}>{user?.[0]?.toUpperCase()}</div>
             <div style={s.userInfo}>
               <div style={s.userName}>{user}</div>
-              <div style={s.userRole}>Administrator</div>
+              <div style={s.userRole}>
+                {isViewer
+                  ? <span style={{color:'var(--text-muted)'}}>Viewer</span>
+                  : <span style={{color:'var(--brand-light)'}}>Administrator</span>
+                }
+              </div>
             </div>
             <button style={s.logoutBtn} onClick={logout} title="Cerrar sesión">⎋</button>
           </div>
@@ -161,7 +157,7 @@ export default function Dashboard() {
         <header style={s.topbar}>
           <div style={s.topbarLeft}>
             <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
-            <h1 style={s.pageTitle}>{NAV.find(n=>n.id===tab)?.label}</h1>
+            <h1 style={s.pageTitle}>{[...NAV_MAIN, {id:'settings',label:'Ajustes'}].find(n=>n.id===tab)?.label}</h1>
             {lastRefresh && tab !== 'settings' && (
               <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString('es-ES')}</span>
             )}
@@ -178,22 +174,23 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-                <span style={s.mobileRunning}><span style={{...s.dot, background:'var(--success)'}} />{running}</span>
-                <AlertPanel onUnreadChange={setUnreadAlerts} />
-                <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
+                <span style={s.mobileRunning}><span style={{...s.dot,background:'var(--success)'}} />{running}</span>
               </>
             )}
+            <AlertPanel onUnreadChange={setUnreadAlerts} />
+            <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
           </div>
         </header>
 
         <div className="nexus-content" style={s.content}>
           {loading && tab !== 'settings' ? <Loader /> : (
             <div key={tab} className="fade-up">
-              {tab==='stacks'   && <StackView   containers={containers} onAction={handleAction} />}
-              {tab==='table'    && <TableView   containers={containers} onAction={handleAction} />}
-              {tab==='all'      && <ContainerList containers={containers} onAction={handleAction} />}
-              {tab==='metrics'  && <MetricsView containers={containers} />}
-              {tab==='settings' && <SettingsView onSettingsChange={handleSettingsChange} />}
+              {tab==='stacks'   && <StackView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='table'    && <TableView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='all'      && <ContainerList  containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='metrics'  && <MetricsView    containers={containers} />}
+              {tab==='events'   && <EventsView />}
+              {tab==='settings' && <SettingsView   onSettingsChange={handleSettingsChange} />}
             </div>
           )}
         </div>
@@ -212,43 +209,44 @@ function Loader() {
 }
 
 const s = {
-  shell: { display:'flex', height:'100vh', overflow:'hidden', position:'relative' },
-  sidebar: { width:'220px', flexShrink:0, background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', justifyContent:'space-between', height:'100vh' },
-  sidebarTop: { padding:'20px 16px', flex:1, overflowY:'auto' },
-  logo: { display:'flex', alignItems:'center', gap:'10px', marginBottom:'28px', padding:'0 4px' },
-  logoMark: { width:'32px', height:'32px', background:'var(--brand-glow)', border:'1px solid var(--border-focus)', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 },
-  logoText: { fontWeight:700, fontSize:'1em', letterSpacing:'0.15em' },
-  nav: { display:'flex', flexDirection:'column', gap:'2px' },
-  navSection: { fontSize:'0.68em', fontWeight:600, letterSpacing:'0.12em', color:'var(--text-muted)', padding:'8px 8px 6px' },
-  navItem: { display:'flex', alignItems:'center', gap:'9px', padding:'10px 10px', background:'transparent', border:'none', borderRadius:'var(--radius)', color:'var(--text-secondary)', fontFamily:'var(--font-sans)', fontSize:'0.9em', cursor:'pointer', transition:'all 0.15s', textAlign:'left', width:'100%', position:'relative' },
-  navItemActive: { background:'var(--bg-elevated)', color:'var(--text-primary)', fontWeight:500 },
-  navIcon: { width:'16px', textAlign:'center' },
-  navActiveBar: { position:'absolute', left:0, top:'20%', bottom:'20%', width:'3px', background:'var(--brand)', borderRadius:'0 2px 2px 0' },
-  sidebarBottom: { borderTop:'1px solid var(--border)', padding:'12px 16px', display:'flex', flexDirection:'column', gap:'12px' },
-  hostInfo: { display:'flex', flexDirection:'column', gap:'4px' },
-  hostRow: { display:'flex', justifyContent:'space-between' },
-  hostLabel: { fontSize:'0.72em', color:'var(--text-muted)' },
-  hostVal: { fontSize:'0.72em', color:'var(--text-secondary)', fontFamily:'var(--font-mono)' },
-  userRow: { display:'flex', alignItems:'center', gap:'10px' },
-  userAvatar: { width:'32px', height:'32px', background:'var(--brand-glow)', border:'1px solid var(--border-focus)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.85em', fontWeight:700, color:'var(--brand-light)', flexShrink:0 },
-  userInfo: { flex:1, minWidth:0 },
-  userName: { fontSize:'0.85em', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
-  userRole: { fontSize:'0.7em', color:'var(--text-muted)' },
-  logoutBtn: { background:'transparent', border:'none', color:'var(--text-muted)', cursor:'pointer', fontSize:'1.1em', padding:'4px', flexShrink:0 },
-  main: { flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 },
-  topbar: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid var(--border)', background:'var(--bg)', flexShrink:0, gap:'8px' },
-  topbarLeft: { display:'flex', alignItems:'center', gap:'10px', flex:1, minWidth:0 },
-  hamburger: { background:'transparent', border:'1px solid var(--border)', borderRadius:'var(--radius)', color:'var(--text-secondary)', fontSize:'1em', cursor:'pointer', padding:'6px 10px', flexShrink:0 },
-  pageTitle: { fontSize:'1em', fontWeight:600, letterSpacing:'-0.01em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
-  refreshBadge: { display:'flex', alignItems:'center', gap:'5px', fontSize:'0.72em', color:'var(--text-muted)', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'20px', padding:'3px 8px', flexShrink:0 },
-  refreshDot: { width:'5px', height:'5px', borderRadius:'50%', background:'var(--success)', animation:'pulse 2s infinite' },
-  topbarRight: { display:'flex', alignItems:'center', gap:'8px', flexShrink:0 },
-  metricPills: { display:'flex', gap:'8px', alignItems:'center' },
-  metricPill: { display:'flex', alignItems:'center', gap:'6px', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'20px', padding:'4px 12px' },
-  dot: { width:'6px', height:'6px', borderRadius:'50%', flexShrink:0 },
-  metricNum: { fontSize:'0.85em', fontWeight:600 },
-  metricLbl: { fontSize:'0.75em', color:'var(--text-muted)' },
-  mobileRunning: { display:'flex', alignItems:'center', gap:'5px', fontSize:'0.85em', fontWeight:600, color:'var(--success)' },
-  refreshBtn: { background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'6px 10px', color:'var(--text-secondary)', fontFamily:'var(--font-sans)', fontSize:'0.9em', cursor:'pointer' },
-  content: { flex:1, overflow:'auto', padding:'20px 24px' },
+  shell:{display:'flex',height:'100vh',overflow:'hidden',position:'relative'},
+  sidebar:{width:'220px',flexShrink:0,background:'var(--bg-surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',justifyContent:'space-between',height:'100vh'},
+  sidebarTop:{padding:'20px 16px',flex:1,overflowY:'auto'},
+  logo:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'28px',padding:'0 4px'},
+  logoMark:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
+  logoText:{fontWeight:700,fontSize:'1em',letterSpacing:'0.15em'},
+  nav:{display:'flex',flexDirection:'column',gap:'2px'},
+  navSection:{fontSize:'0.68em',fontWeight:600,letterSpacing:'0.12em',color:'var(--text-muted)',padding:'8px 8px 6px'},
+  navItem:{display:'flex',alignItems:'center',gap:'9px',padding:'10px 10px',background:'transparent',border:'none',borderRadius:'var(--radius)',color:'var(--text-secondary)',fontFamily:'var(--font-sans)',fontSize:'0.9em',cursor:'pointer',transition:'all 0.15s',textAlign:'left',width:'100%',position:'relative'},
+  navItemActive:{background:'var(--bg-elevated)',color:'var(--text-primary)',fontWeight:500},
+  navIcon:{width:'16px',textAlign:'center'},
+  navActiveBar:{position:'absolute',left:0,top:'20%',bottom:'20%',width:'3px',background:'var(--brand)',borderRadius:'0 2px 2px 0'},
+  alertBadge:{marginLeft:'auto',background:'var(--danger)',color:'white',fontSize:'0.65em',fontWeight:700,borderRadius:'20px',padding:'1px 6px'},
+  sidebarBottom:{borderTop:'1px solid var(--border)',padding:'12px 16px',display:'flex',flexDirection:'column',gap:'12px'},
+  hostInfo:{display:'flex',flexDirection:'column',gap:'4px'},
+  hostRow:{display:'flex',justifyContent:'space-between'},
+  hostLabel:{fontSize:'0.72em',color:'var(--text-muted)'},
+  hostVal:{fontSize:'0.72em',color:'var(--text-secondary)',fontFamily:'var(--font-mono)'},
+  userRow:{display:'flex',alignItems:'center',gap:'10px'},
+  userAvatar:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.85em',fontWeight:700,color:'var(--brand-light)',flexShrink:0},
+  userInfo:{flex:1,minWidth:0},
+  userName:{fontSize:'0.85em',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},
+  userRole:{fontSize:'0.7em'},
+  logoutBtn:{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:'1.1em',padding:'4px',flexShrink:0},
+  main:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0},
+  topbar:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid var(--border)',background:'var(--bg)',flexShrink:0,gap:'8px'},
+  topbarLeft:{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0},
+  hamburger:{background:'transparent',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text-secondary)',fontSize:'1em',cursor:'pointer',padding:'6px 10px',flexShrink:0},
+  pageTitle:{fontSize:'1em',fontWeight:600,letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},
+  refreshBadge:{display:'flex',alignItems:'center',gap:'5px',fontSize:'0.72em',color:'var(--text-muted)',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'20px',padding:'3px 8px',flexShrink:0},
+  refreshDot:{width:'5px',height:'5px',borderRadius:'50%',background:'var(--success)',animation:'pulse 2s infinite'},
+  topbarRight:{display:'flex',alignItems:'center',gap:'8px',flexShrink:0},
+  metricPills:{display:'flex',gap:'8px',alignItems:'center'},
+  metricPill:{display:'flex',alignItems:'center',gap:'6px',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 12px'},
+  dot:{width:'6px',height:'6px',borderRadius:'50%',flexShrink:0},
+  metricNum:{fontSize:'0.85em',fontWeight:600},
+  metricLbl:{fontSize:'0.75em',color:'var(--text-muted)'},
+  mobileRunning:{display:'flex',alignItems:'center',gap:'5px',fontSize:'0.85em',fontWeight:600,color:'var(--success)'},
+  refreshBtn:{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'6px 10px',color:'var(--text-secondary)',fontFamily:'var(--font-sans)',fontSize:'0.9em',cursor:'pointer'},
+  content:{flex:1,overflow:'auto',padding:'20px 24px'},
 };

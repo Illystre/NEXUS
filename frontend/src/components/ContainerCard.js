@@ -36,7 +36,7 @@ function PortBadge({ port }) {
   );
 }
 
-export default function ContainerCard({ container, onAction }) {
+export default function ContainerCard({ container, onAction, isViewer }) {
   const { token } = useAuth();
   const [stats, setStats] = useState(null);
   const [showLogs, setShowLogs] = useState(false);
@@ -126,14 +126,15 @@ export default function ContainerCard({ container, onAction }) {
 
         <div style={s.actions}>
           <div style={s.actionsLeft}>
-            {isRunning
+            {!isViewer && (isRunning
               ? <ActionBtn label="Stop"    icon="⏹" onClick={() => doAction('stop')}    variant="danger"   loading={actionLoading==='stop'} />
               : <ActionBtn label="Start"   icon="▶" onClick={() => doAction('start')}   variant="success"  loading={actionLoading==='start'} />
-            }
-            <ActionBtn label="Restart" icon="↺" onClick={() => doAction('restart')} variant="default" loading={actionLoading==='restart'} />
-            {isRunning && (
+            )}
+            {!isViewer && <ActionBtn label="Restart" icon="↺" onClick={() => doAction('restart')} variant="default" loading={actionLoading==='restart'} />}
+            {!isViewer && isRunning && (
               <ActionBtn label="Terminal" icon="⌨" onClick={() => setShowTerminal(true)} variant="brand" />
             )}
+            {isViewer && <span style={{fontSize:'0.75em',color:'var(--text-muted)'}}>Solo lectura</span>}
           </div>
           <button
             style={{...s.logsToggle, color: showLogs ? 'var(--brand)' : 'var(--text-muted)', borderColor: showLogs ? 'var(--border-focus)' : 'var(--border)', background: showLogs ? 'var(--brand-glow)' : 'transparent'}}

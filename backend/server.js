@@ -5,19 +5,57 @@ const Docker = require('dockerode');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'changeme_secret_key';
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS_HASH = bcrypt.hashSync(process.env.ADMIN_PASS || 'admin123', 10);
+const JWT_SECRET  = process.env.JWT_SECRET || 'changeme_secret_key';
+const DATA_DIR    = process.env.DATA_DIR || '/data';
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const USERS_FILE    = path.join(DATA_DIR, 'users.json');
 
 app.use(cors());
 app.use(express.json());
 
+// ── Persistence helpers ──────────────────────────────────────────────────────
+function ensureDir() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+function loadSettings() {
+  try { if (fs.existsSync(SETTINGS_FILE)) return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); } catch {}
+  return { theme: 'dark', accent: '#4f78ff', refreshInterval: 5000, telegram: { token: '', chatId: '' } };
+}
+function saveSettings(data) { ensureDir(); fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2)); }
+
+function loadUsers() {
+  try { if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch {}
+  // Default: single admin from env
+  const adminUser = process.env.ADMIN_USER || 'admin';
+  const adminPass = process.env.ADMIN_PASS || 'admin123';
+  return [{ id: 1, username: adminUser, passwordHash: bcrypt.hashSync(adminPass, 10), role: 'admin', createdAt: new Date().toISOString() }];
+}
+function saveUsers(users) { ensureDir(); fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
+
+let users = loadUsers();
+
+// ── Event log ────────────────────────────────────────────────────────────────
+const events = [];
+let eventSeq = 0;
+
+function logEvent({ type, actor, target, detail }) {
+  const ev = { id: ++eventSeq, type, actor: actor || 'system', target: target || '', detail: detail || '', ts: new Date().toISOString() };
+  events.unshift(ev);
+  if (events.length > 500) events.pop();
+  io.emit('event:new', ev);
+  return ev;
+}
+
+// ── Auth middleware ──────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token' });
@@ -25,26 +63,34 @@ function authMiddleware(req, res, next) {
   catch { res.status(401).json({ error: 'Invalid token' }); }
 }
 
+function adminOnly(req, res, next) {
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores' });
+  next();
+}
+
+// ── Login ────────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
-  if (username !== ADMIN_USER || !bcrypt.compareSync(password, global.RUNTIME_PASS_HASH || ADMIN_PASS_HASH))
+  const user = users.find(u => u.username === username);
+  if (!user || !bcrypt.compareSync(password, user.passwordHash))
     return res.status(401).json({ error: 'Credenciales incorrectas' });
-  const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
-  res.json({ token });
+  const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+  logEvent({ type: 'login', actor: username, detail: `Login desde IP ${req.ip}` });
+  res.json({ token, role: user.role });
 });
 
+// ── Containers ───────────────────────────────────────────────────────────────
 app.get('/api/containers', authMiddleware, async (req, res) => {
   try {
     const containers = await docker.listContainers({ all: true });
-    const enriched = containers.map(c => ({
+    res.json(containers.map(c => ({
       id: c.Id, shortId: c.Id.substring(0, 12),
       name: c.Names[0]?.replace('/', '') || 'unknown',
       image: c.Image, status: c.Status, state: c.State,
       created: c.Created, ports: c.Ports,
       stack: c.Labels['com.docker.compose.project'] || null,
       service: c.Labels['com.docker.compose.service'] || null,
-    }));
-    res.json(enriched);
+    })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -58,19 +104,27 @@ app.get('/api/containers/:id/stats', authMiddleware, async (req, res) => {
     const cpuPercent = systemDelta > 0 ? (cpuDelta / systemDelta) * numCpus * 100 : 0;
     const memUsage = stats.memory_stats.usage || 0;
     const memLimit = stats.memory_stats.limit || 1;
-    res.json({
-      cpu: Math.round(cpuPercent * 100) / 100,
-      memUsage, memLimit,
-      memPercent: Math.round((memUsage / memLimit) * 10000) / 100,
-    });
+    res.json({ cpu: Math.round(cpuPercent * 100) / 100, memUsage, memLimit, memPercent: Math.round((memUsage / memLimit) * 10000) / 100 });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/containers/:id/:action', authMiddleware, async (req, res) => {
+app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, res) => {
   const { id, action } = req.params;
   if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Acción no permitida' });
-  try { if (action === 'stop') markManualStop(id);
-    await docker.getContainer(id)[action](); res.json({ ok: true }); }
+  try {
+    if (action === 'stop') markManualStop(id);
+    await docker.getContainer(id)[action]();
+    // Find container name for log
+    const containers = await docker.listContainers({ all: true });
+    const c = containers.find(c => c.Id === id);
+    const name = c?.Names[0]?.replace('/', '') || id.substring(0, 12);
+    logEvent({ type: `container:${action}`, actor: req.user.username, target: name, detail: `${action} ejecutado manualmente` });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
+  try { res.json(await docker.getContainer(req.params.id).inspect()); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -80,6 +134,143 @@ app.get('/api/info', authMiddleware, async (req, res) => {
     res.json({ containers: info.Containers, running: info.ContainersRunning, stopped: info.ContainersStopped, images: info.Images, dockerVersion: info.ServerVersion, os: info.OperatingSystem, memory: info.MemTotal, cpus: info.NCPU });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// ── Users (admin only) ───────────────────────────────────────────────────────
+app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
+  res.json(users.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
+});
+
+app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+  if (!['admin','viewer'].includes(role)) return res.status(400).json({ error: 'Rol inválido' });
+  if (users.find(u => u.username === username)) return res.status(400).json({ error: 'El usuario ya existe' });
+  if (password.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+  const newUser = { id: Date.now(), username, passwordHash: bcrypt.hashSync(password, 10), role, createdAt: new Date().toISOString() };
+  users.push(newUser);
+  saveUsers(users);
+  logEvent({ type: 'user:created', actor: req.user.username, target: username, detail: `Rol: ${role}` });
+  res.json({ id: newUser.id, username: newUser.username, role: newUser.role, createdAt: newUser.createdAt });
+});
+
+app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
+  const user = users.find(u => u.id === Number(req.params.id));
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  const { role, password } = req.body;
+  if (role && ['admin','viewer'].includes(role)) user.role = role;
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+    user.passwordHash = bcrypt.hashSync(password, 10);
+  }
+  saveUsers(users);
+  logEvent({ type: 'user:updated', actor: req.user.username, target: user.username, detail: role ? `Rol cambiado a ${role}` : 'Contraseña actualizada' });
+  res.json({ id: user.id, username: user.username, role: user.role });
+});
+
+app.delete('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
+  const idx = users.findIndex(u => u.id === Number(req.params.id));
+  if (idx === -1) return res.status(404).json({ error: 'Usuario no encontrado' });
+  if (users[idx].id === req.user.id) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+  const deleted = users.splice(idx, 1)[0];
+  saveUsers(users);
+  logEvent({ type: 'user:deleted', actor: req.user.username, target: deleted.username });
+  res.json({ ok: true });
+});
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+app.get('/api/settings', authMiddleware, (req, res) => res.json(loadSettings()));
+
+app.put('/api/settings', authMiddleware, adminOnly, (req, res) => {
+  const current = loadSettings();
+  const updated = { ...current, ...req.body };
+  if (req.body.telegram?.token === '••••••••') updated.telegram.token = current.telegram?.token || '';
+  saveSettings(updated);
+  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Ajustes actualizados' });
+  res.json(updated);
+});
+
+app.post('/api/settings/change-password', authMiddleware, (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = users.find(u => u.id === req.user.id);
+  if (!user || !bcrypt.compareSync(currentPassword, user.passwordHash))
+    return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+  user.passwordHash = bcrypt.hashSync(newPassword, 10);
+  saveUsers(users);
+  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Contraseña cambiada' });
+  res.json({ ok: true });
+});
+
+app.post('/api/settings/test-telegram', authMiddleware, adminOnly, async (req, res) => {
+  const { token, chatId } = req.body;
+  if (!token || !chatId) return res.status(400).json({ error: 'Token y Chat ID requeridos' });
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: '✅ NEXUS conectado correctamente a Telegram!' })
+    });
+    const data = await response.json();
+    if (data.ok) res.json({ ok: true });
+    else res.status(400).json({ error: data.description || 'Error de Telegram' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Events log ───────────────────────────────────────────────────────────────
+app.get('/api/events', authMiddleware, (req, res) => {
+  const { type, limit = 100, offset = 0 } = req.query;
+  let filtered = type ? events.filter(e => e.type.startsWith(type)) : events;
+  res.json({ total: filtered.length, events: filtered.slice(Number(offset), Number(offset) + Number(limit)) });
+});
+
+app.delete('/api/events', authMiddleware, adminOnly, (req, res) => {
+  events.length = 0;
+  eventSeq = 0;
+  res.json({ ok: true });
+});
+
+// ── Alert system ─────────────────────────────────────────────────────────────
+const containerStates = new Map();
+const alerts = [];
+let alertSeq = 0;
+
+function markManualStop(id) {
+  const s = containerStates.get(id);
+  if (s) s.manualStop = true;
+}
+
+async function pollContainerAlerts() {
+  try {
+    const containers = await docker.listContainers({ all: true });
+    for (const c of containers) {
+      const id = c.Id;
+      const name = c.Names[0]?.replace('/', '') || id.substring(0, 12);
+      const state = c.State;
+      const prev = containerStates.get(id);
+      if (prev) {
+        if (prev.state === 'running' && state !== 'running' && !prev.manualStop) {
+          const alert = { id: ++alertSeq, containerId: id, name, from: 'running', to: state, ts: new Date().toISOString(), read: false };
+          alerts.unshift(alert);
+          if (alerts.length > 100) alerts.pop();
+          io.emit('alert:new', alert);
+          logEvent({ type: 'container:crash', actor: 'system', target: name, detail: `Caída inesperada → ${state}` });
+        }
+        if (state === 'running') prev.manualStop = false;
+        prev.state = state;
+      } else {
+        containerStates.set(id, { state, name, manualStop: false });
+      }
+    }
+    const ids = new Set(containers.map(c => c.Id));
+    for (const id of containerStates.keys()) { if (!ids.has(id)) containerStates.delete(id); }
+  } catch {}
+}
+
+setInterval(pollContainerAlerts, 5000);
+pollContainerAlerts();
+
+app.get('/api/alerts', authMiddleware, (req, res) => res.json(alerts));
+app.post('/api/alerts/read-all', authMiddleware, (req, res) => { alerts.forEach(a => a.read = true); res.json({ ok: true }); });
+app.delete('/api/alerts', authMiddleware, adminOnly, (req, res) => { alerts.length = 0; res.json({ ok: true }); });
 
 // ── Socket auth ──────────────────────────────────────────────────────────────
 io.use((socket, next) => {
@@ -93,13 +284,10 @@ const activeLogStreams = new Map();
 const activeExecSessions = new Map();
 
 io.on('connection', (socket) => {
-
-  // ── Logs ──────────────────────────────────────────────────────────────────
   socket.on('subscribe:logs', async ({ containerId }) => {
     if (activeLogStreams.has(socket.id + containerId)) return;
     try {
-      const container = docker.getContainer(containerId);
-      const stream = await container.logs({ follow: true, stdout: true, stderr: true, tail: 100 });
+      const stream = await docker.getContainer(containerId).logs({ follow: true, stdout: true, stderr: true, tail: 100 });
       activeLogStreams.set(socket.id + containerId, stream);
       stream.on('data', chunk => socket.emit('log:line', { containerId, text: chunk.slice(8).toString('utf8') }));
       stream.on('end', () => activeLogStreams.delete(socket.id + containerId));
@@ -111,30 +299,19 @@ io.on('connection', (socket) => {
     if (stream) { stream.destroy(); activeLogStreams.delete(socket.id + containerId); }
   });
 
-  // ── Exec / Terminal ───────────────────────────────────────────────────────
-  socket.on('exec:start', async ({ containerId, cols = 80, rows = 24 }) => {
+  socket.on('exec:start', async ({ containerId }) => {
     try {
-      const container = docker.getContainer(containerId);
-      const exec = await container.exec({
+      const exec = await docker.getContainer(containerId).exec({
         Cmd: ['/bin/sh', '-c', 'if command -v bash > /dev/null; then bash; else sh; fi'],
-        AttachStdin: true, AttachStdout: true, AttachStderr: true,
-        Tty: true,
+        AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: true,
       });
       const stream = await exec.start({ hijack: true, stdin: true, Tty: true });
-
       activeExecSessions.set(socket.id + containerId, stream);
-
       stream.on('data', chunk => socket.emit('exec:output', { containerId, data: chunk.toString('utf8') }));
-      stream.on('end', () => {
-        socket.emit('exec:exit', { containerId });
-        activeExecSessions.delete(socket.id + containerId);
-      });
+      stream.on('end', () => { socket.emit('exec:exit', { containerId }); activeExecSessions.delete(socket.id + containerId); });
       stream.on('error', err => socket.emit('exec:error', { containerId, error: err.message }));
-
       socket.emit('exec:ready', { containerId });
-    } catch (err) {
-      socket.emit('exec:error', { containerId, error: err.message });
-    }
+    } catch (err) { socket.emit('exec:error', { containerId, error: err.message }); }
   });
 
   socket.on('exec:input', ({ containerId, data }) => {
@@ -148,167 +325,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    for (const [key, stream] of activeLogStreams) {
-      if (key.startsWith(socket.id)) { stream.destroy(); activeLogStreams.delete(key); }
-    }
-    for (const [key, stream] of activeExecSessions) {
-      if (key.startsWith(socket.id)) { stream.end(); activeExecSessions.delete(key); }
-    }
+    for (const [key, stream] of activeLogStreams) { if (key.startsWith(socket.id)) { stream.destroy(); activeLogStreams.delete(key); } }
+    for (const [key, stream] of activeExecSessions) { if (key.startsWith(socket.id)) { stream.end(); activeExecSessions.delete(key); } }
   });
 });
-
-// ── Container inspect ──────────────────────────────────────────────────────
-app.get("/api/containers/:id/inspect", authMiddleware, async (req, res) => {
-  try {
-    const container = docker.getContainer(req.params.id);
-    const data = await container.inspect();
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-
-// ── Settings ─────────────────────────────────────────────────────────────────
-const fs = require('fs');
-const SETTINGS_FILE = process.env.SETTINGS_FILE || '/data/settings.json';
-
-function loadSettings() {
-  try {
-    if (fs.existsSync(SETTINGS_FILE)) return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'));
-  } catch {}
-  return { theme: 'dark', accent: '#4f78ff', refreshInterval: 5000, telegram: { token: '', chatId: '' } };
-}
-
-function saveSettings(data) {
-  const dir = require('path').dirname(SETTINGS_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2));
-}
-
-app.get('/api/settings', authMiddleware, (req, res) => {
-  res.json(loadSettings());
-});
-
-app.put('/api/settings', authMiddleware, (req, res) => {
-  const current = loadSettings();
-  const updated = { ...current, ...req.body };
-  // Don't allow overwriting telegram token with masked value
-  if (req.body.telegram?.token === '••••••••') updated.telegram.token = current.telegram?.token || '';
-  saveSettings(updated);
-  res.json(updated);
-});
-
-app.post('/api/settings/change-password', authMiddleware, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!bcrypt.compareSync(currentPassword, ADMIN_PASS_HASH))
-    return res.status(401).json({ error: 'Contraseña actual incorrecta' });
-  if (!newPassword || newPassword.length < 6)
-    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
-  // Update in-memory hash (persists until restart — for full persistence use settings file)
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  // Store new hash in settings
-  const s = loadSettings();
-  s._passwordHash = newHash;
-  saveSettings(s);
-  // Update runtime hash
-  global.RUNTIME_PASS_HASH = newHash;
-  res.json({ ok: true });
-});
-
-app.post('/api/settings/test-telegram', authMiddleware, async (req, res) => {
-  const { token, chatId } = req.body;
-  if (!token || !chatId) return res.status(400).json({ error: 'Token y Chat ID requeridos' });
-  try {
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: '✅ NEXUS conectado correctamente a Telegram!' })
-    });
-    const data = await response.json();
-    if (data.ok) res.json({ ok: true });
-    else res.status(400).json({ error: data.description || 'Error de Telegram' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-// ── Alert system ─────────────────────────────────────────────────────────────
-const containerStates = new Map();   // id → { state, name, manualStop: bool }
-const alerts = [];                   // { id, containerId, name, from, to, ts }
-let alertSeq = 0;
-
-// Mark a container as manually stopped (called from action endpoint)
-function markManualStop(id) {
-  const s = containerStates.get(id);
-  if (s) s.manualStop = true;
-}
-
-// Poll containers and emit alerts
-async function pollContainerAlerts() {
-  try {
-    const containers = await docker.listContainers({ all: true });
-    for (const c of containers) {
-      const id = c.Id;
-      const name = c.Names[0]?.replace('/', '') || id.substring(0, 12);
-      const state = c.State;
-      const prev = containerStates.get(id);
-
-      if (prev) {
-        const wasRunning = prev.state === 'running';
-        const isRunning  = state === 'running';
-
-        // Detect unexpected stop
-        if (wasRunning && !isRunning && !prev.manualStop) {
-          const alert = {
-            id: ++alertSeq,
-            containerId: id,
-            name,
-            from: 'running',
-            to: state,
-            ts: new Date().toISOString(),
-            read: false,
-          };
-          alerts.unshift(alert);
-          if (alerts.length > 100) alerts.pop();
-          // Broadcast to all connected sockets
-          io.emit('alert:new', alert);
-        }
-
-        // Reset manualStop flag once container is running again
-        if (isRunning) prev.manualStop = false;
-        prev.state = state;
-      } else {
-        containerStates.set(id, { state, name, manualStop: false });
-      }
-    }
-    // Remove entries for containers that no longer exist
-    const ids = new Set(containers.map(c => c.Id));
-    for (const id of containerStates.keys()) {
-      if (!ids.has(id)) containerStates.delete(id);
-    }
-  } catch {}
-}
-
-setInterval(pollContainerAlerts, 5000);
-pollContainerAlerts();
-
-// Alerts endpoints
-app.get('/api/alerts', authMiddleware, (req, res) => {
-  res.json(alerts);
-});
-
-app.post('/api/alerts/read-all', authMiddleware, (req, res) => {
-  alerts.forEach(a => a.read = true);
-  res.json({ ok: true });
-});
-
-app.delete('/api/alerts', authMiddleware, (req, res) => {
-  alerts.length = 0;
-  res.json({ ok: true });
-});
-
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));

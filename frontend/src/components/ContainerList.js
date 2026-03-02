@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ContainerCard from './ContainerCard';
 
-export default function ContainerList({ containers, onAction }) {
+export default function ContainerList({ containers, onAction, isViewer }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
 
@@ -32,7 +32,7 @@ export default function ContainerList({ containers, onAction }) {
         <span style={s.count}>{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="nexus-grid" style={s.grid}>
-        {filtered.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} />)}
+        {filtered.map(c => <ContainerCard key={c.id} container={c} onAction={onAction} isViewer={isViewer} />)}
         {filtered.length === 0 && <div style={s.empty}>No se encontraron contenedores</div>}
       </div>
     </div>
