@@ -9,7 +9,7 @@ RUN npm run build
 
 # ── Stage 2: Backend + compiled frontend ─────────────────────────────────────
 FROM node:20-alpine
-RUN addgroup -S nexus && adduser -S nexus -G nexus && addgroup nexus docker
+RUN addgroup -S docker && addgroup -S nexus && adduser -S nexus -G nexus && addgroup nexus docker
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm install --production
