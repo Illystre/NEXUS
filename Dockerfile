@@ -9,21 +9,18 @@ RUN npm run build
 
 # ── Stage 2: Backend + compiled frontend ─────────────────────────────────────
 FROM node:20-alpine
+RUN addgroup -S nexus && adduser -S nexus -G nexus
 WORKDIR /app
-
 COPY backend/package*.json ./
 RUN npm install --production
-
 COPY backend/ .
 COPY --from=build-frontend /app/frontend/build ./public
-
+RUN mkdir -p /data && chown -R nexus:nexus /app /data
+USER nexus
 EXPOSE 3001
-
 ENV NODE_ENV=production \
     PORT=3001 \
     DATA_DIR=/data
-
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://localhost:3001/api/health || exit 1
-
 CMD ["node", "server.js"]
