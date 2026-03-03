@@ -184,7 +184,156 @@ function UsersPanel({ showToast }) {
   );
 }
 
-export default function SettingsView({ onSettingsChange }) {
+function HostsPanel({ showToast, onHostsChange }) {
+  const [hosts, setHosts]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm]       = useState({ name: '', url: '' });
+  const [creating, setCreating] = useState(false);
+  const [editId, setEditId]   = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', url: '' });
+  const [testingId, setTestingId] = useState(null);
+  const [testResults, setTestResults] = useState({});
+
+  const load = async () => {
+    setLoading(true);
+    try { const r = await axios.get('/api/hosts'); setHosts(r.data); onHostsChange?.(r.data); } catch {}
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const create = async () => {
+    if (!form.name || !form.url) return showToast('Nombre y URL requeridos', 'error');
+    setCreating(true);
+    try {
+      await axios.post('/api/hosts', form);
+      setForm({ name: '', url: '' });
+      await load();
+      showToast('Host añadido');
+    } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
+    finally { setCreating(false); }
+  };
+
+  const update = async (id) => {
+    try {
+      await axios.put(`/api/hosts/${id}`, editForm);
+      setEditId(null);
+      await load();
+      showToast('Host actualizado');
+    } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
+  };
+
+  const remove = async (id, name) => {
+    if (!window.confirm(`¿Eliminar host "${name}"?`)) return;
+    try { await axios.delete(`/api/hosts/${id}`); await load(); showToast('Host eliminado'); }
+    catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
+  };
+
+  const test = async (id) => {
+    setTestingId(id);
+    setTestResults(p => ({ ...p, [id]: null }));
+    try {
+      const r = await axios.post(`/api/hosts/${id}/test`);
+      setTestResults(p => ({ ...p, [id]: { ok: true, msg: `✓ Docker ${r.data.version} · ${r.data.containers} contenedores` } }));
+    } catch (e) {
+      setTestResults(p => ({ ...p, [id]: { ok: false, msg: e.response?.data?.error || 'Sin conexión' } }));
+    }
+    finally { setTestingId(null); }
+  };
+
+  return (
+    <>
+      <Section title="Hosts remotos" subtitle="Conecta NEXUS a otros servidores Docker">
+        {loading ? (
+          <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Cargando...</div>
+        ) : hosts.length === 0 ? (
+          <div style={{padding:'20px 18px',color:'var(--text-muted)',fontSize:'0.85em'}}>
+            No hay hosts remotos. Añade uno abajo.
+          </div>
+        ) : (
+          hosts.map(h => (
+            <div key={h.id} style={s.hostItemRow}>
+              <div style={s.hostItemIcon}>🌐</div>
+              <div style={s.hostItemInfo}>
+                {editId === h.id ? (
+                  <div style={s.editRow}>
+                    <input style={{...s.input, width:'120px'}} value={editForm.name} onChange={e => setEditForm(p=>({...p,name:e.target.value}))} placeholder="Nombre" />
+                    <input style={{...s.input, width:'200px', fontFamily:'var(--font-mono)', fontSize:'0.8em'}} value={editForm.url} onChange={e => setEditForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
+                    <button style={s.saveSmallBtn} onClick={() => update(h.id)}>✓</button>
+                    <button style={s.cancelBtn} onClick={() => setEditId(null)}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={s.hostItemName}>{h.name}</div>
+                    <div style={s.hostItemUrl}>{h.url}</div>
+                    {testResults[h.id] && (
+                      <div style={{fontSize:'0.75em', marginTop:'4px', color: testResults[h.id].ok ? 'var(--success)' : 'var(--danger)'}}>
+                        {testResults[h.id].msg}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              {editId !== h.id && (
+                <div style={s.userActions}>
+                  <button
+                    style={{...s.editBtn, color:'var(--brand-light)', borderColor:'var(--border-focus)'}}
+                    onClick={() => test(h.id)}
+                    disabled={testingId === h.id}
+                  >
+                    {testingId === h.id ? '...' : '⚡ Test'}
+                  </button>
+                  <button style={s.editBtn} onClick={() => { setEditId(h.id); setEditForm({ name: h.name, url: h.url }); }}>✏</button>
+                  <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗑</button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </Section>
+
+      <Section title="Añadir host remoto">
+        <Field label="Nombre" hint="Ej: NAS, VPS, Servidor2">
+          <input style={{...s.input, width:'180px'}} value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} placeholder="Mi servidor" />
+        </Field>
+        <Field label="URL Docker" hint={<>Ej: <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>http://192.168.1.50:2375</code></>}>
+          <input style={{...s.input, width:'240px', fontFamily:'var(--font-mono)', fontSize:'0.85em'}} value={form.url} onChange={e => setForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
+        </Field>
+        <div style={s.fieldActions}>
+          <button style={s.saveBtn} onClick={create} disabled={creating || !form.name || !form.url}>
+            {creating ? 'Añadiendo...' : '+ Añadir host'}
+          </button>
+        </div>
+      </Section>
+
+      <Section title="Configuración en el servidor remoto" subtitle="El servidor remoto necesita exponer la API de Docker">
+        <div style={{padding:'14px 18px'}}>
+          <div style={{fontSize:'0.82em',color:'var(--text-secondary)',marginBottom:'10px'}}>
+            Añade este servicio al <code style={s.code}>docker-compose.yml</code> del servidor remoto:
+          </div>
+          <pre style={s.codeBlock}>{`  dockerproxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    ports:
+      - "2375:2375"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - STATS=1
+      - POST=1`}</pre>
+          <div style={{fontSize:'0.78em',color:'var(--text-muted)',marginTop:'8px'}}>
+            ⚠ Asegúrate de que el puerto 2375 solo sea accesible desde tu red local o usa un firewall.
+          </div>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+export default function SettingsView({ onSettingsChange, onHostsChange }) {
   const { role } = useAuth();
   const [settings, setSettings] = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -235,7 +384,7 @@ export default function SettingsView({ onSettingsChange }) {
 
   const isAdmin = role === 'admin';
   const TABS = isAdmin
-    ? ['apariencia', 'perfil', 'usuarios', 'telegram', 'sistema']
+    ? ['apariencia', 'perfil', 'usuarios', 'hosts', 'telegram', 'sistema']
     : ['apariencia', 'perfil'];
 
   if (loading) return (
@@ -251,7 +400,7 @@ export default function SettingsView({ onSettingsChange }) {
       <div style={s.subTabs}>
         {TABS.map(t => (
           <button key={t} style={{...s.subTab, ...(tab===t?s.subTabActive:{})}} onClick={() => setTab(t)}>
-            { {apariencia:'🎨', perfil:'👤', usuarios:'👥', telegram:'📱', sistema:'⚙'}[t] } {t.charAt(0).toUpperCase()+t.slice(1)}
+            { {apariencia:'🎨', perfil:'👤', usuarios:'👥', hosts:'🖧', telegram:'📱', sistema:'⚙'}[t] } {t.charAt(0).toUpperCase()+t.slice(1)}
             {tab===t && <span style={s.subTabBar} />}
           </button>
         ))}
@@ -304,6 +453,8 @@ export default function SettingsView({ onSettingsChange }) {
         )}
 
         {tab==='usuarios' && isAdmin && <UsersPanel showToast={showToast} />}
+
+        {tab==='hosts' && isAdmin && <HostsPanel showToast={showToast} onHostsChange={onHostsChange} />}
 
         {tab==='telegram' && isAdmin && (
           <>
@@ -387,6 +538,8 @@ const s = {
   radioLabel:{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',fontSize:'0.85em'},
   radio:{accentColor:'var(--brand)',width:'14px',height:'14px'},
   mono:{fontFamily:'var(--font-mono)',fontSize:'0.82em',color:'var(--text-secondary)'},
+  code:{fontFamily:'var(--font-mono)',fontSize:'0.85em',color:'var(--brand-light)'},
+  codeBlock:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px',fontSize:'0.78em',fontFamily:'var(--font-mono)',color:'var(--text-secondary)',overflowX:'auto',lineHeight:1.6},
   // Users panel
   userRow:{display:'flex',alignItems:'center',gap:'12px',padding:'10px 18px',borderTop:'1px solid var(--border)'},
   userAvatar:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.85em',fontWeight:700,color:'var(--brand-light)',flexShrink:0},
@@ -401,4 +554,10 @@ const s = {
   permRow:{display:'flex',alignItems:'center',padding:'8px 18px',borderTop:'1px solid var(--border)'},
   permName:{flex:1,fontSize:'0.82em',color:'var(--text-secondary)'},
   permCheck:{width:'80px',textAlign:'center',fontSize:'0.85em',fontWeight:600},
+  // Hosts panel
+  hostItemRow:{display:'flex',alignItems:'center',gap:'12px',padding:'10px 18px',borderTop:'1px solid var(--border)'},
+  hostItemIcon:{fontSize:'1.1em',flexShrink:0},
+  hostItemInfo:{flex:1,minWidth:0},
+  hostItemName:{fontSize:'0.88em',fontWeight:500},
+  hostItemUrl:{fontSize:'0.75em',color:'var(--text-muted)',fontFamily:'var(--font-mono)'},
 };

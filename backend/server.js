@@ -11,23 +11,22 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
-const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const localDocker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-const JWT_SECRET  = process.env.JWT_SECRET || 'changeme_secret_key';
-const DATA_DIR    = process.env.DATA_DIR || '/data';
+const JWT_SECRET    = process.env.JWT_SECRET || 'changeme_secret_key';
+const DATA_DIR      = process.env.DATA_DIR || '/data';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const USERS_FILE    = path.join(DATA_DIR, 'users.json');
+const HOSTS_FILE    = path.join(DATA_DIR, 'hosts.json');
 
 app.use(cors());
 app.use(express.json());
 
-// Serve frontend static files in production (unified image)
 const PUBLIC_DIR = path.join(__dirname, 'public');
-if (require('fs').existsSync(PUBLIC_DIR)) {
+if (fs.existsSync(PUBLIC_DIR)) {
   app.use(express.static(PUBLIC_DIR));
 }
 
-// ── Persistence helpers ──────────────────────────────────────────────────────
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -40,16 +39,33 @@ function saveSettings(data) { ensureDir(); fs.writeFileSync(SETTINGS_FILE, JSON.
 
 function loadUsers() {
   try { if (fs.existsSync(USERS_FILE)) return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch {}
-  // Default: single admin from env
   const adminUser = process.env.ADMIN_USER || 'admin';
   const adminPass = process.env.ADMIN_PASS || 'admin123';
   return [{ id: 1, username: adminUser, passwordHash: bcrypt.hashSync(adminPass, 10), role: 'admin', createdAt: new Date().toISOString() }];
 }
 function saveUsers(users) { ensureDir(); fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2)); }
 
+function loadHosts() {
+  try { if (fs.existsSync(HOSTS_FILE)) return JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8')); } catch {}
+  return [];
+}
+function saveHosts(hosts) { ensureDir(); fs.writeFileSync(HOSTS_FILE, JSON.stringify(hosts, null, 2)); }
+
 let users = loadUsers();
 
-// ── Event log ────────────────────────────────────────────────────────────────
+function getDocker(hostId) {
+  if (!hostId || hostId === 'local') return localDocker;
+  const hosts = loadHosts();
+  const host = hosts.find(h => h.id === hostId);
+  if (!host) throw new Error(`Host '${hostId}' no encontrado`);
+  const urlObj = new URL(host.url);
+  return new Docker({
+    host: urlObj.hostname,
+    port: parseInt(urlObj.port) || 2375,
+    protocol: urlObj.protocol.replace(':', '')
+  });
+}
+
 const events = [];
 let eventSeq = 0;
 
@@ -61,7 +77,6 @@ function logEvent({ type, actor, target, detail }) {
   return ev;
 }
 
-// ── Auth middleware ──────────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token' });
@@ -74,7 +89,6 @@ function adminOnly(req, res, next) {
   next();
 }
 
-// ── Login ────────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const user = users.find(u => u.username === username);
@@ -85,9 +99,59 @@ app.post('/api/login', (req, res) => {
   res.json({ token, role: user.role });
 });
 
+// ── Hosts ────────────────────────────────────────────────────────────────────
+app.get('/api/hosts', authMiddleware, (req, res) => {
+  res.json(loadHosts());
+});
+
+app.post('/api/hosts', authMiddleware, adminOnly, (req, res) => {
+  const { name, url } = req.body;
+  if (!name || !url) return res.status(400).json({ error: 'Nombre y URL requeridos' });
+  const hosts = loadHosts();
+  if (hosts.find(h => h.name === name)) return res.status(400).json({ error: 'Ya existe un host con ese nombre' });
+  const newHost = { id: `host_${Date.now()}`, name, url, createdAt: new Date().toISOString() };
+  hosts.push(newHost);
+  saveHosts(hosts);
+  logEvent({ type: 'host:created', actor: req.user.username, target: name, detail: url });
+  res.json(newHost);
+});
+
+app.put('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
+  const hosts = loadHosts();
+  const host = hosts.find(h => h.id === req.params.id);
+  if (!host) return res.status(404).json({ error: 'Host no encontrado' });
+  const { name, url } = req.body;
+  if (name) host.name = name;
+  if (url) host.url = url;
+  saveHosts(hosts);
+  logEvent({ type: 'host:updated', actor: req.user.username, target: host.name });
+  res.json(host);
+});
+
+app.delete('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
+  const hosts = loadHosts();
+  const idx = hosts.findIndex(h => h.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Host no encontrado' });
+  const deleted = hosts.splice(idx, 1)[0];
+  saveHosts(hosts);
+  logEvent({ type: 'host:deleted', actor: req.user.username, target: deleted.name });
+  res.json({ ok: true });
+});
+
+app.post('/api/hosts/:id/test', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const docker = getDocker(req.params.id);
+    const info = await docker.info();
+    res.json({ ok: true, version: info.ServerVersion, containers: info.Containers });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ── Containers ───────────────────────────────────────────────────────────────
 app.get('/api/containers', authMiddleware, async (req, res) => {
   try {
+    const docker = getDocker(req.query.host);
     const containers = await docker.listContainers({ all: true });
     res.json(containers.map(c => ({
       id: c.Id, shortId: c.Id.substring(0, 12),
@@ -102,6 +166,7 @@ app.get('/api/containers', authMiddleware, async (req, res) => {
 
 app.get('/api/containers/:id/stats', authMiddleware, async (req, res) => {
   try {
+    const docker = getDocker(req.query.host);
     const container = docker.getContainer(req.params.id);
     const stats = await container.stats({ stream: false });
     const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
@@ -118,9 +183,9 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
   const { id, action } = req.params;
   if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Acción no permitida' });
   try {
-    if (action === 'stop') markManualStop(id);
+    const docker = getDocker(req.query.host);
+    if (!req.query.host || req.query.host === 'local') markManualStop(id);
     await docker.getContainer(id)[action]();
-    // Find container name for log
     const containers = await docker.listContainers({ all: true });
     const c = containers.find(c => c.Id === id);
     const name = c?.Names[0]?.replace('/', '') || id.substring(0, 12);
@@ -130,20 +195,23 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
 });
 
 app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
-  try { res.json(await docker.getContainer(req.params.id).inspect()); }
-  catch (err) { res.status(500).json({ error: err.message }); }
+  try {
+    const docker = getDocker(req.query.host);
+    res.json(await docker.getContainer(req.params.id).inspect());
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
+    const docker = getDocker(req.query.host);
     const info = await docker.info();
     res.json({ containers: info.Containers, running: info.ContainersRunning, stopped: info.ContainersStopped, images: info.Images, dockerVersion: info.ServerVersion, os: info.OperatingSystem, memory: info.MemTotal, cpus: info.NCPU });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Users (admin only) ───────────────────────────────────────────────────────
+// ── Users ────────────────────────────────────────────────────────────────────
 app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
   res.json(users.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
 });
@@ -223,7 +291,7 @@ app.post('/api/settings/test-telegram', authMiddleware, adminOnly, async (req, r
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Events log ───────────────────────────────────────────────────────────────
+// ── Events ───────────────────────────────────────────────────────────────────
 app.get('/api/events', authMiddleware, (req, res) => {
   const { type, limit = 100, offset = 0 } = req.query;
   let filtered = type ? events.filter(e => e.type.startsWith(type)) : events;
@@ -231,8 +299,7 @@ app.get('/api/events', authMiddleware, (req, res) => {
 });
 
 app.delete('/api/events', authMiddleware, adminOnly, (req, res) => {
-  events.length = 0;
-  eventSeq = 0;
+  events.length = 0; eventSeq = 0;
   res.json({ ok: true });
 });
 
@@ -248,7 +315,7 @@ function markManualStop(id) {
 
 async function pollContainerAlerts() {
   try {
-    const containers = await docker.listContainers({ all: true });
+    const containers = await localDocker.listContainers({ all: true });
     for (const c of containers) {
       const id = c.Id;
       const name = c.Names[0]?.replace('/', '') || id.substring(0, 12);
@@ -280,7 +347,7 @@ app.get('/api/alerts', authMiddleware, (req, res) => res.json(alerts));
 app.post('/api/alerts/read-all', authMiddleware, (req, res) => { alerts.forEach(a => a.read = true); res.json({ ok: true }); });
 app.delete('/api/alerts', authMiddleware, adminOnly, (req, res) => { alerts.length = 0; res.json({ ok: true }); });
 
-// ── Socket auth ──────────────────────────────────────────────────────────────
+// ── Socket ───────────────────────────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('No token'));
@@ -292,13 +359,15 @@ const activeLogStreams = new Map();
 const activeExecSessions = new Map();
 
 io.on('connection', (socket) => {
-  socket.on('subscribe:logs', async ({ containerId }) => {
-    if (activeLogStreams.has(socket.id + containerId)) return;
+  socket.on('subscribe:logs', async ({ containerId, hostId }) => {
+    const key = socket.id + containerId;
+    if (activeLogStreams.has(key)) return;
     try {
+      const docker = getDocker(hostId);
       const stream = await docker.getContainer(containerId).logs({ follow: true, stdout: true, stderr: true, tail: 100 });
-      activeLogStreams.set(socket.id + containerId, stream);
+      activeLogStreams.set(key, stream);
       stream.on('data', chunk => socket.emit('log:line', { containerId, text: chunk.slice(8).toString('utf8') }));
-      stream.on('end', () => activeLogStreams.delete(socket.id + containerId));
+      stream.on('end', () => activeLogStreams.delete(key));
     } catch (err) { socket.emit('log:error', { containerId, error: err.message }); }
   });
 
@@ -307,8 +376,9 @@ io.on('connection', (socket) => {
     if (stream) { stream.destroy(); activeLogStreams.delete(socket.id + containerId); }
   });
 
-  socket.on('exec:start', async ({ containerId }) => {
+  socket.on('exec:start', async ({ containerId, hostId }) => {
     try {
+      const docker = getDocker(hostId);
       const exec = await docker.getContainer(containerId).exec({
         Cmd: ['/bin/sh', '-c', 'if command -v bash > /dev/null; then bash; else sh; fi'],
         AttachStdin: true, AttachStdout: true, AttachStderr: true, Tty: true,
@@ -338,8 +408,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// SPA fallback
-if (require('fs').existsSync(path.join(__dirname, 'public', 'index.html'))) {
+if (fs.existsSync(path.join(__dirname, 'public', 'index.html'))) {
   app.get('*', (req, res) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
       res.sendFile(path.join(__dirname, 'public', 'index.html'));

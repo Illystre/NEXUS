@@ -40,15 +40,17 @@ function applyTheme(settings) {
 
 export default function Dashboard() {
   const { user, role, logout } = useAuth();
-  const [tab, setTab]           = useState('stacks');
+  const [tab, setTab]               = useState('stacks');
   const [containers, setContainers] = useState([]);
-  const [info, setInfo]         = useState(null);
-  const [loading, setLoading]   = useState(true);
+  const [info, setInfo]             = useState(null);
+  const [loading, setLoading]       = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [settings, setSettings] = useState(null);
+  const [settings, setSettings]     = useState(null);
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [hosts, setHosts]           = useState([]);
+  const [selectedHost, setSelectedHost] = useState('local');
 
   const isViewer = role === 'viewer';
   const isAdmin  = role === 'admin';
@@ -58,29 +60,47 @@ export default function Dashboard() {
       setSettings(r.data); applyTheme(r.data);
       if (r.data.refreshInterval) setRefreshInterval(r.data.refreshInterval);
     }).catch(() => {});
+    axios.get('/api/hosts').then(r => setHosts(r.data)).catch(() => {});
   }, []);
 
-  const handleSettingsChange = (s) => { setSettings(s); applyTheme(s); if (s.refreshInterval) setRefreshInterval(s.refreshInterval); };
+  const handleSettingsChange = (s) => {
+    setSettings(s); applyTheme(s);
+    if (s.refreshInterval) setRefreshInterval(s.refreshInterval);
+  };
+
+  const hostParam = selectedHost === 'local' ? '' : `?host=${selectedHost}`;
 
   const fetchAll = useCallback(async () => {
     try {
-      const [cRes, iRes] = await Promise.all([axios.get('/api/containers'), axios.get('/api/info')]);
+      const [cRes, iRes] = await Promise.all([
+        axios.get(`/api/containers${hostParam}`),
+        axios.get(`/api/info${hostParam}`)
+      ]);
       setContainers(cRes.data); setInfo(iRes.data); setLastRefresh(new Date());
     } catch(e) { if (e.response?.status === 401) logout(); }
     finally { setLoading(false); }
-  }, [logout]);
+  }, [logout, hostParam]);
 
-  useEffect(() => { fetchAll(); const i = setInterval(fetchAll, refreshInterval); return () => clearInterval(i); }, [fetchAll, refreshInterval]);
+  useEffect(() => {
+    setLoading(true);
+    fetchAll();
+    const i = setInterval(fetchAll, refreshInterval);
+    return () => clearInterval(i);
+  }, [fetchAll, refreshInterval]);
 
   const handleAction = async (id, action) => {
     if (isViewer) return;
-    await axios.post(`/api/containers/${id}/${action}`);
+    await axios.post(`/api/containers/${id}/${action}${hostParam}`);
     setTimeout(fetchAll, 800);
   };
 
   const running = containers.filter(c => c.state === 'running').length;
   const stopped = containers.filter(c => c.state !== 'running').length;
   const stacks  = [...new Set(containers.map(c => c.stack).filter(Boolean))].length;
+
+  const currentHostName = selectedHost === 'local'
+    ? 'Local'
+    : hosts.find(h => h.id === selectedHost)?.name || selectedHost;
 
   const NAV_MAIN = [
     { id:'stacks',  icon:'⊞', label:'Stacks' },
@@ -109,6 +129,23 @@ export default function Dashboard() {
             </div>
             <span style={s.logoText}>NEXUS</span>
           </div>
+
+          {hosts.length > 0 && (
+            <div style={s.hostSelectorWrap}>
+              <div style={s.hostSelectorLabel}>SERVIDOR</div>
+              <select
+                style={s.hostSelect}
+                value={selectedHost}
+                onChange={e => { setSelectedHost(e.target.value); setLoading(true); }}
+              >
+                <option value="local">🖥 Local</option>
+                {hosts.map(h => (
+                  <option key={h.id} value={h.id}>🌐 {h.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <nav style={s.nav}>
             <div style={s.navSection}>VISTAS</div>
             {NAV_MAIN.map(n => (
@@ -158,6 +195,11 @@ export default function Dashboard() {
           <div style={s.topbarLeft}>
             <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
             <h1 style={s.pageTitle}>{[...NAV_MAIN, {id:'settings',label:'Ajustes'}].find(n=>n.id===tab)?.label}</h1>
+            {hosts.length > 0 && (
+              <span style={s.hostBadge}>
+                {selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}
+              </span>
+            )}
             {lastRefresh && tab !== 'settings' && (
               <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString('es-ES')}</span>
             )}
@@ -184,13 +226,13 @@ export default function Dashboard() {
 
         <div className="nexus-content" style={s.content}>
           {loading && tab !== 'settings' ? <Loader /> : (
-            <div key={tab} className="fade-up">
+            <div key={tab + selectedHost} className="fade-up">
               {tab==='stacks'   && <StackView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
               {tab==='table'    && <TableView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
               {tab==='all'      && <ContainerList  containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='metrics'  && <MetricsView    containers={containers} />}
+              {tab==='metrics'  && <MetricsView    containers={containers} hostParam={hostParam} />}
               {tab==='events'   && <EventsView />}
-              {tab==='settings' && <SettingsView   onSettingsChange={handleSettingsChange} />}
+              {tab==='settings' && <SettingsView   onSettingsChange={handleSettingsChange} onHostsChange={setHosts} />}
             </div>
           )}
         </div>
@@ -212,9 +254,12 @@ const s = {
   shell:{display:'flex',height:'100vh',overflow:'hidden',position:'relative'},
   sidebar:{width:'220px',flexShrink:0,background:'var(--bg-surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',justifyContent:'space-between',height:'100vh'},
   sidebarTop:{padding:'20px 16px',flex:1,overflowY:'auto'},
-  logo:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'28px',padding:'0 4px'},
+  logo:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',padding:'0 4px'},
   logoMark:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
   logoText:{fontWeight:700,fontSize:'1em',letterSpacing:'0.15em'},
+  hostSelectorWrap:{marginBottom:'16px'},
+  hostSelectorLabel:{fontSize:'0.68em',fontWeight:600,letterSpacing:'0.12em',color:'var(--text-muted)',padding:'0 4px 6px'},
+  hostSelect:{width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text-primary)',fontFamily:'var(--font-sans)',fontSize:'0.85em',padding:'7px 10px',cursor:'pointer',outline:'none'},
   nav:{display:'flex',flexDirection:'column',gap:'2px'},
   navSection:{fontSize:'0.68em',fontWeight:600,letterSpacing:'0.12em',color:'var(--text-muted)',padding:'8px 8px 6px'},
   navItem:{display:'flex',alignItems:'center',gap:'9px',padding:'10px 10px',background:'transparent',border:'none',borderRadius:'var(--radius)',color:'var(--text-secondary)',fontFamily:'var(--font-sans)',fontSize:'0.9em',cursor:'pointer',transition:'all 0.15s',textAlign:'left',width:'100%',position:'relative'},
@@ -238,6 +283,7 @@ const s = {
   topbarLeft:{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0},
   hamburger:{background:'transparent',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text-secondary)',fontSize:'1em',cursor:'pointer',padding:'6px 10px',flexShrink:0},
   pageTitle:{fontSize:'1em',fontWeight:600,letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},
+  hostBadge:{display:'flex',alignItems:'center',gap:'4px',fontSize:'0.72em',color:'var(--brand-light)',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'20px',padding:'3px 8px',flexShrink:0,whiteSpace:'nowrap'},
   refreshBadge:{display:'flex',alignItems:'center',gap:'5px',fontSize:'0.72em',color:'var(--text-muted)',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'20px',padding:'3px 8px',flexShrink:0},
   refreshDot:{width:'5px',height:'5px',borderRadius:'50%',background:'var(--success)',animation:'pulse 2s infinite'},
   topbarRight:{display:'flex',alignItems:'center',gap:'8px',flexShrink:0},
