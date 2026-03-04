@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/placeholder/nexus/main/docs/logo.svg" width="64" height="64" alt="NEXUS Logo">
+<img src="https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/Nexus.png" width="180" alt="NEXUS Logo">
 
 # NEXUS Container Platform
 
@@ -10,8 +10,6 @@
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
-
-![NEXUS Dashboard Preview](https://raw.githubusercontent.com/placeholder/nexus/main/docs/preview.png)
 
 </div>
 
@@ -27,9 +25,23 @@
 - **🔔 Crash alerts** — real-time notifications when a container stops unexpectedly
 - **📝 Event history** — full audit log: actions, logins, config changes
 - **👥 Multi-user** — Admin and Viewer roles, manage users from the UI
+- **🌐 Multi-host** — manage multiple Docker servers from a single panel
+- **🌍 Multi-language** — English and Spanish support
 - **🎨 Themeable** — dark/light mode + custom accent color
 - **📱 PWA + Mobile** — installable as desktop/mobile app, fully responsive
 - **🔒 JWT auth** — secure token-based authentication
+
+---
+
+## 📸 Screenshots
+
+| Stacks view | Metrics with sparklines |
+|---|---|
+| ![Stacks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Stack.png) | ![Metrics](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Metric.png) |
+
+| Terminal | Settings |
+|---|---|
+| ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Settings](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Settings.png) |
 
 ---
 
@@ -60,8 +72,6 @@ Default credentials: `admin` / `admin123` *(change these in your `.env`)*
 docker compose pull && docker compose up -d
 ```
 
-That's it — no git clone needed, ever.
-
 ---
 
 ## 🐳 Docker Compose
@@ -79,7 +89,7 @@ services:
       - ADMIN_PASS=admin123
       - JWT_SECRET=your_secret_key_here
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
       - nexus-data:/data
 
 volumes:
@@ -98,11 +108,8 @@ cd NEXUS
 cp .env.example .env
 # Edit .env with your credentials
 
-# Run (single container)
+# Run
 docker compose up --build -d
-
-# Run (development mode, hot reload)
-docker compose -f docker-compose.dev.yml up --build -d
 ```
 
 ---
@@ -123,23 +130,38 @@ docker compose -f docker-compose.dev.yml up --build -d
 
 ## 🧭 Roadmap
 
-- [ ] Telegram notifications on container crash
-- [ ] Resource limits per container from UI
-- [ ] Image manager (pull, remove, inspect)
-- [ ] Docker network manager
-- [ ] 2FA for admin accounts
+### v1.2.0 ✅ — Internationalization
+- [x] English and Spanish language support
+- [x] Language selector on Login screen
+- [x] Language selector in Settings → System
 
----
+### v1.3.0 — Container Management
+- [ ] Create containers from UI (guided form)
+- [ ] Docker Compose editor with syntax highlighting
+- [ ] Deploy stacks directly from the interface
+- [ ] Edit and delete existing stacks
 
-## 📸 Screenshots
+### v1.4.0 — Image Management
+- [ ] List local images
+- [ ] Search and pull images from Docker Hub
+- [ ] Remove images
+- [ ] View image layers and details
 
-| Stacks view | Metrics with sparklines |
-|---|---|
-| ![Stacks](docs/stacks.png) | ![Metrics](docs/metrics.png) |
+### v1.5.0 — Network & Volumes
+- [ ] Docker network management (create, delete, inspect)
+- [ ] Volume management (create, delete, inspect)
+- [ ] Assign networks and volumes when creating containers
 
-| Terminal | Settings |
-|---|---|
-| ![Terminal](docs/terminal.png) | ![Settings](docs/settings.png) |
+### v1.6.0 — Enterprise Features
+- [ ] SSO / LDAP integration
+- [ ] Advanced RBAC (permissions per stack, per host)
+- [ ] Full audit trail
+- [ ] Email notifications
+
+### v2.0.0 — SaaS & Multi-tenant
+- [ ] Cloud hosted version
+- [ ] Multiple organizations
+- [ ] Free / Pro / Business plans
 
 ---
 
