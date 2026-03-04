@@ -1,5 +1,6 @@
 import React from 'react';
 import { AuthProvider, useAuth } from './AuthContext';
+import { LanguageProvider } from './components/LanguageContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 
@@ -10,8 +11,10 @@ function Inner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Inner />
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <Inner />
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
