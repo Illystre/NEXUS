@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Terminal from './Terminal';
 import ContainerDetail from './ContainerDetail';
+import { useLang } from './LanguageContext';
 
 const STATE_STYLE = {
   running:    { color:'var(--success)', bg:'var(--success-bg)', border:'var(--success-border)' },
@@ -15,20 +16,23 @@ function fmtMem(b) {
   return mb >= 1024 ? `${(mb/1024).toFixed(1)}GB` : `${mb.toFixed(0)}MB`;
 }
 
-function fmtUptime(status) {
+function fmtUptime(status, stopped) {
   if (!status) return '—';
   if (status.startsWith('Up ')) return status.replace('Up ', '');
-  if (status.startsWith('Exited')) return 'Stopped';
+  if (status.startsWith('Exited')) return stopped;
   return status.split(' ').slice(0,3).join(' ');
 }
 
 export default function TableView({ containers, onAction, isViewer }) {
+  const { t } = useLang();
+  const l = t.tableView;
+  const la = t.actions;
   const [search, setSearch]       = useState('');
   const [filter, setFilter]       = useState('all');
   const [sortKey, setSortKey]     = useState('name');
   const [sortDir, setSortDir]     = useState('asc');
-  const [terminal, setTerminal] = useState(null);
-  const [detail, setDetail] = useState(null);
+  const [terminal, setTerminal]   = useState(null);
+  const [detail, setDetail]       = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
 
   const handleSort = (key) => {
@@ -69,37 +73,30 @@ export default function TableView({ containers, onAction, isViewer }) {
       {terminal && <Terminal container={terminal} onClose={() => setTerminal(null)} />}
       {detail && <ContainerDetail container={detail} onClose={() => setDetail(null)} />}
 
-      {/* Toolbar */}
       <div style={s.toolbar}>
         <div style={s.searchWrap}>
           <span style={s.searchIcon}>⌕</span>
-          <input
-            style={s.search}
-            placeholder="Buscar por nombre, imagen o stack..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <input style={s.search} placeholder={l.search} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={s.filters}>
-          {[['all','Todos'],['running','Running'],['stopped','Stopped']].map(([v,l]) => (
-            <button key={v} style={{...s.filterBtn, ...(filter===v ? s.filterActive:{})}} onClick={() => setFilter(v)}>{l}</button>
+          {[['all', l.all],['running','Running'],['stopped','Stopped']].map(([v,lb]) => (
+            <button key={v} style={{...s.filterBtn, ...(filter===v ? s.filterActive:{})}} onClick={() => setFilter(v)}>{lb}</button>
           ))}
         </div>
-        <span style={s.count}>{filtered.length} de {containers.length}</span>
+        <span style={s.count}>{filtered.length} {l.of} {containers.length}</span>
       </div>
 
-      {/* Table */}
       <div className="nexus-table-wrap" style={s.tableWrap}>
         <table style={s.table}>
           <thead>
             <tr style={s.thead}>
-              <Th label="Estado"    col="state"  onSort={handleSort}><SortIcon col="state" /></Th>
-              <Th label="Nombre"    col="name"   onSort={handleSort}><SortIcon col="name" /></Th>
-              <Th label="Imagen"    col="image"  onSort={handleSort}><SortIcon col="image" /></Th>
-              <Th label="Stack"     col="stack"  onSort={handleSort}><SortIcon col="stack" /></Th>
-              <Th label="Uptime"    col="status" onSort={handleSort}><SortIcon col="status" /></Th>
-              <Th label="Puertos" />
-              <Th label="Acciones" />
+              <Th label={l.state}   col="state"  onSort={handleSort}><SortIcon col="state" /></Th>
+              <Th label={l.name}    col="name"   onSort={handleSort}><SortIcon col="name" /></Th>
+              <Th label={l.image}   col="image"  onSort={handleSort}><SortIcon col="image" /></Th>
+              <Th label={l.stack}   col="stack"  onSort={handleSort}><SortIcon col="stack" /></Th>
+              <Th label={l.uptime}  col="status" onSort={handleSort}><SortIcon col="status" /></Th>
+              <Th label={l.ports} />
+              <Th label={l.actions} />
             </tr>
           </thead>
           <tbody>
@@ -110,69 +107,47 @@ export default function TableView({ containers, onAction, isViewer }) {
 
               return (
                 <tr key={c.id} style={{...s.row, background: i % 2 === 0 ? 'var(--bg-elevated)' : 'var(--bg-surface)'}}>
-                  {/* Estado */}
                   <td style={s.td}>
                     <div style={{...s.statePill, color: st.color, background: st.bg, border:`1px solid ${st.border}`}}>
                       <span style={{...s.dot, background: st.color}} />
                       {c.state}
                     </div>
                   </td>
-
-                  {/* Nombre */}
                   <td style={s.td}>
                     <div style={{...s.nameCell, cursor:'pointer', color:'var(--brand-light)'}} onClick={() => setDetail(c)}>{c.name}</div>
                     <div style={s.idCell}>{c.shortId}</div>
                   </td>
-
-                  {/* Imagen */}
                   <td style={s.td}>
                     <span style={s.monoText}>{c.image.split(':')[0]}</span>
-                    {c.image.includes(':') && (
-                      <span style={s.tagText}>:{c.image.split(':')[1]}</span>
-                    )}
+                    {c.image.includes(':') && <span style={s.tagText}>:{c.image.split(':')[1]}</span>}
                   </td>
-
-                  {/* Stack */}
                   <td style={s.td}>
-                    {c.stack
-                      ? <span style={s.stackBadge}>{c.stack}</span>
-                      : <span style={s.nullText}>—</span>
-                    }
+                    {c.stack ? <span style={s.stackBadge}>{c.stack}</span> : <span style={s.nullText}>—</span>}
                   </td>
-
-                  {/* Uptime */}
                   <td style={s.td}>
                     <span style={{...s.uptimeText, color: isRunning ? 'var(--success)' : 'var(--text-muted)'}}>
-                      {fmtUptime(c.status)}
+                      {fmtUptime(c.status, l.stopped)}
                     </span>
                   </td>
-
-                  {/* Puertos */}
                   <td style={s.td}>
                     <div style={s.portsCell}>
                       {ports.length === 0
                         ? <span style={s.nullText}>—</span>
                         : ports.slice(0,3).map((p, i) => (
-                          <a key={i} href={`http://localhost:${p.PublicPort}`} target="_blank" rel="noreferrer" style={s.portLink}>
-                            {p.PublicPort}
-                          </a>
+                          <a key={i} href={`http://localhost:${p.PublicPort}`} target="_blank" rel="noreferrer" style={s.portLink}>{p.PublicPort}</a>
                         ))
                       }
                       {ports.length > 3 && <span style={s.nullText}>+{ports.length-3}</span>}
                     </div>
                   </td>
-
-                  {/* Acciones */}
                   <td style={s.td}>
                     <div style={s.actionsCell}>
                       {!isViewer && (isRunning
-                        ? <TBtn label="Stop" color="var(--danger)" loading={actionLoading===c.id+'stop'} onClick={() => doAction(c.id,'stop')} />
-                        : <TBtn label="Start" color="var(--success)" loading={actionLoading===c.id+'start'} onClick={() => doAction(c.id,'start')} />)
+                        ? <TBtn label={la.stop}    color="var(--danger)"         loading={actionLoading===c.id+'stop'}    onClick={() => doAction(c.id,'stop')} />
+                        : <TBtn label={la.start}   color="var(--success)"        loading={actionLoading===c.id+'start'}   onClick={() => doAction(c.id,'start')} />)
                       }
-                      <TBtn label="↺" color="var(--text-secondary)" loading={actionLoading===c.id+'restart'} onClick={() => doAction(c.id,'restart')} />
-                      {isRunning && (
-                        <TBtn label="⌨ Term" color="var(--brand-light)" onClick={() => setTerminal(c)} />
-                      )}
+                      <TBtn label="↺"              color="var(--text-secondary)" loading={actionLoading===c.id+'restart'} onClick={() => doAction(c.id,'restart')} />
+                      {isRunning && <TBtn label={`⌨ ${la.terminal}`} color="var(--brand-light)" onClick={() => setTerminal(c)} />}
                     </div>
                   </td>
                 </tr>
@@ -180,10 +155,7 @@ export default function TableView({ containers, onAction, isViewer }) {
             })}
           </tbody>
         </table>
-
-        {filtered.length === 0 && (
-          <div style={s.empty}>No se encontraron contenedores</div>
-        )}
+        {filtered.length === 0 && <div style={s.empty}>{l.noContainers}</div>}
       </div>
     </div>
   );
@@ -192,9 +164,7 @@ export default function TableView({ containers, onAction, isViewer }) {
 function Th({ label, col, onSort, children }) {
   return (
     <th style={s.th} onClick={col ? () => onSort(col) : undefined}>
-      <span style={{cursor: col ? 'pointer' : 'default', userSelect:'none'}}>
-        {label}{children}
-      </span>
+      <span style={{cursor: col ? 'pointer' : 'default', userSelect:'none'}}>{label}{children}</span>
     </th>
   );
 }

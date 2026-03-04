@@ -1,44 +1,49 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { useAuth } from '../AuthContext';
-
-const EVENT_TYPES = [
-  { key: '',                label: 'Todos',       color: 'var(--text-muted)' },
-  { key: 'container',      label: 'Contenedores', color: 'var(--brand-light)' },
-  { key: 'container:crash',label: 'Caídas',       color: 'var(--danger)' },
-  { key: 'login',          label: 'Logins',       color: 'var(--success)' },
-  { key: 'user',           label: 'Usuarios',     color: 'var(--warning)' },
-  { key: 'settings',       label: 'Ajustes',      color: 'var(--info)' },
-];
-
-const TYPE_META = {
-  'container:start':   { icon:'▶', color:'var(--success)',    label:'Iniciado' },
-  'container:stop':    { icon:'⏹', color:'var(--danger)',     label:'Parado' },
-  'container:restart': { icon:'↺', color:'var(--warning)',    label:'Reiniciado' },
-  'container:crash':   { icon:'💥', color:'var(--danger)',    label:'Caída' },
-  'login':             { icon:'🔑', color:'var(--success)',   label:'Login' },
-  'user:created':      { icon:'👤', color:'var(--brand-light)', label:'Usuario creado' },
-  'user:updated':      { icon:'✏', color:'var(--warning)',   label:'Usuario editado' },
-  'user:deleted':      { icon:'🗑', color:'var(--danger)',    label:'Usuario eliminado' },
-  'settings:changed':  { icon:'⚙', color:'var(--info)',      label:'Ajustes' },
-};
+import { useLang } from './LanguageContext';
 
 function fmtTime(ts) {
   const d = new Date(ts);
-  return d.toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  return d.toLocaleString(undefined, { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
 
-function timeAgo(ts) {
+function timeAgo(ts, l) {
   const diff = Math.floor((Date.now() - new Date(ts)) / 1000);
-  if (diff < 60)   return `hace ${diff}s`;
-  if (diff < 3600) return `hace ${Math.floor(diff/60)}min`;
-  if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`;
-  return `hace ${Math.floor(diff/86400)}d`;
+  if (diff < 60)   return `${diff}${l.ago_s}`;
+  if (diff < 3600) return `${Math.floor(diff/60)}${l.ago_min}`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}${l.ago_h}`;
+  return `${Math.floor(diff/86400)}d`;
 }
 
 export default function EventsView() {
   const { token, role } = useAuth();
+  const { t } = useLang();
+  const l = t.eventsView;
+  const al = t.alertPanel;
+
+  const EVENT_TYPES = [
+    { key: '',                 label: l.all },
+    { key: 'container',       label: l.containers,  color: 'var(--brand-light)' },
+    { key: 'container:crash', label: l.crashes,     color: 'var(--danger)' },
+    { key: 'login',           label: l.logins,      color: 'var(--success)' },
+    { key: 'user',            label: l.users,       color: 'var(--warning)' },
+    { key: 'settings',        label: l.settings,    color: 'var(--info)' },
+  ];
+
+  const TYPE_META = {
+    'container:start':   { icon:'▶', color:'var(--success)',    label: l.started },
+    'container:stop':    { icon:'⏹', color:'var(--danger)',     label: l.stopped },
+    'container:restart': { icon:'↺', color:'var(--warning)',    label: l.restarted },
+    'container:crash':   { icon:'💥', color:'var(--danger)',    label: l.crashed },
+    'login':             { icon:'🔑', color:'var(--success)',   label: l.login },
+    'user:created':      { icon:'👤', color:'var(--brand-light)', label: l.userCreated },
+    'user:updated':      { icon:'✏', color:'var(--warning)',   label: l.userUpdated },
+    'user:deleted':      { icon:'🗑', color:'var(--danger)',    label: l.userDeleted },
+    'settings:changed':  { icon:'⚙', color:'var(--info)',      label: l.settingsChanged },
+  };
+
   const [events, setEvents] = useState([]);
   const [total, setTotal]   = useState(0);
   const [filter, setFilter] = useState('');
@@ -62,7 +67,6 @@ export default function EventsView() {
 
   useEffect(() => { fetchEvents(); }, []);
 
-  // Live updates via WebSocket
   useEffect(() => {
     const socket = io('', { auth: { token } });
     socket.on('event:new', (ev) => {
@@ -74,10 +78,7 @@ export default function EventsView() {
     return () => socket.disconnect();
   }, [token, filter]);
 
-  const handleFilter = (f) => {
-    setFilter(f);
-    fetchEvents(f, 0);
-  };
+  const handleFilter = (f) => { setFilter(f); fetchEvents(f, 0); };
 
   const clearAll = async () => {
     setClearing(true);
@@ -88,51 +89,48 @@ export default function EventsView() {
 
   return (
     <div>
-      {/* Toolbar */}
       <div style={s.toolbar}>
         <div style={s.filters}>
-          {EVENT_TYPES.map(t => (
-            <button
-              key={t.key}
-              style={{...s.filterBtn, ...(filter===t.key ? {...s.filterActive, color: t.color, borderColor: t.color + '60'} : {})}}
-              onClick={() => handleFilter(t.key)}
+          {EVENT_TYPES.map(tp => (
+            <button key={tp.key}
+              style={{...s.filterBtn, ...(filter===tp.key ? {...s.filterActive, color: tp.color || 'var(--text-primary)', borderColor: (tp.color || 'var(--border)') + '60'} : {})}}
+              onClick={() => handleFilter(tp.key)}
             >
-              {t.label}
+              {tp.label}
             </button>
           ))}
         </div>
         <div style={s.toolbarRight}>
-          <span style={s.totalBadge}>{total} eventos</span>
+          <span style={s.totalBadge}>{total} {l.events}</span>
           {role === 'admin' && (
             <button style={s.clearBtn} onClick={clearAll} disabled={clearing || events.length === 0}>
-              {clearing ? 'Limpiando...' : '🗑 Limpiar'}
+              {clearing ? l.clearing : l.clear}
             </button>
           )}
           <button style={s.refreshBtn} onClick={() => fetchEvents(filter, offset)}>↺</button>
         </div>
       </div>
 
-      {/* Table */}
       <div style={s.tableWrap}>
         {loading ? (
           <div style={s.loader}>
             <div style={s.spinner} />
-            <span style={{color:'var(--text-muted)',fontSize:'0.85em'}}>Cargando eventos...</span>
+            <span style={{color:'var(--text-muted)',fontSize:'0.85em'}}>{l.loading}</span>
           </div>
         ) : events.length === 0 ? (
           <div style={s.empty}>
             <div style={s.emptyIcon}>📋</div>
-            <div style={s.emptyText}>Sin eventos registrados</div>
+            <div style={s.emptyText}>{l.noEvents}</div>
           </div>
         ) : (
           <table style={s.table}>
             <thead>
               <tr style={s.thead}>
-                <th style={s.th}>Tipo</th>
-                <th style={s.th}>Actor</th>
-                <th style={s.th}>Objetivo</th>
-                <th style={s.th}>Detalle</th>
-                <th style={s.th}>Hora</th>
+                <th style={s.th}>{l.type}</th>
+                <th style={s.th}>{l.actor}</th>
+                <th style={s.th}>{l.target}</th>
+                <th style={s.th}>{l.detail}</th>
+                <th style={s.th}>{l.time}</th>
               </tr>
             </thead>
             <tbody>
@@ -140,24 +138,11 @@ export default function EventsView() {
                 const meta = TYPE_META[ev.type] || { icon:'●', color:'var(--text-muted)', label: ev.type };
                 return (
                   <tr key={ev.id} style={{...s.row, background: i%2===0 ? 'var(--bg-elevated)':'var(--bg-surface)'}}>
-                    <td style={s.td}>
-                      <div style={s.typeCell}>
-                        <span style={s.typeIcon}>{meta.icon}</span>
-                        <span style={{...s.typeLabel, color: meta.color}}>{meta.label}</span>
-                      </div>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.actor}>{ev.actor}</span>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.target}>{ev.target || '—'}</span>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.detail}>{ev.detail || '—'}</span>
-                    </td>
-                    <td style={s.td}>
-                      <span style={s.time} title={fmtTime(ev.ts)}>{timeAgo(ev.ts)}</span>
-                    </td>
+                    <td style={s.td}><div style={s.typeCell}><span style={s.typeIcon}>{meta.icon}</span><span style={{...s.typeLabel, color: meta.color}}>{meta.label}</span></div></td>
+                    <td style={s.td}><span style={s.actor}>{ev.actor}</span></td>
+                    <td style={s.td}><span style={s.target}>{ev.target || '—'}</span></td>
+                    <td style={s.td}><span style={s.detail}>{ev.detail || '—'}</span></td>
+                    <td style={s.td}><span style={s.time} title={fmtTime(ev.ts)}>{timeAgo(ev.ts, al)}</span></td>
                   </tr>
                 );
               })}
@@ -166,12 +151,11 @@ export default function EventsView() {
         )}
       </div>
 
-      {/* Pagination */}
       {total > PAGE && (
         <div style={s.pagination}>
-          <button style={s.pageBtn} disabled={offset === 0} onClick={() => fetchEvents(filter, offset - PAGE)}>← Anterior</button>
+          <button style={s.pageBtn} disabled={offset === 0} onClick={() => fetchEvents(filter, offset - PAGE)}>{l.prev}</button>
           <span style={s.pageInfo}>{Math.floor(offset/PAGE)+1} / {Math.ceil(total/PAGE)}</span>
-          <button style={s.pageBtn} disabled={offset + PAGE >= total} onClick={() => fetchEvents(filter, offset + PAGE)}>Siguiente →</button>
+          <button style={s.pageBtn} disabled={offset + PAGE >= total} onClick={() => fetchEvents(filter, offset + PAGE)}>{l.next}</button>
         </div>
       )}
     </div>

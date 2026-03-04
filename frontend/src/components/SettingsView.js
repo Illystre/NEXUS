@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
+import { useLang } from './LanguageContext';
 
 const ACCENT_PRESETS = [
-  { name:'Azul',    value:'#4f78ff' },
-  { name:'Índigo',  value:'#6366f1' },
-  { name:'Verde',   value:'#22c55e' },
-  { name:'Cian',    value:'#06b6d4' },
-  { name:'Naranja', value:'#f97316' },
-  { name:'Rosa',    value:'#ec4899' },
-];
-
-const REFRESH_OPTIONS = [
-  { label:'1 segundo',   value:1000 },
-  { label:'3 segundos',  value:3000 },
-  { label:'5 segundos',  value:5000 },
-  { label:'15 segundos', value:15000 },
-  { label:'30 segundos', value:30000 },
-  { label:'1 minuto',    value:60000 },
+  { name:'Blue',   value:'#4f78ff' },
+  { name:'Indigo', value:'#6366f1' },
+  { name:'Green',  value:'#22c55e' },
+  { name:'Cyan',   value:'#06b6d4' },
+  { name:'Orange', value:'#f97316' },
+  { name:'Pink',   value:'#ec4899' },
 ];
 
 function Section({ title, subtitle, children }) {
@@ -55,6 +47,8 @@ function Toast({ msg, type }) {
 
 function UsersPanel({ showToast }) {
   const { user: currentUser } = useAuth();
+  const { t } = useLang();
+  const l = t.settings;
   const [users, setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm]     = useState({ username:'', password:'', role:'viewer' });
@@ -76,7 +70,7 @@ function UsersPanel({ showToast }) {
       await axios.post('/api/users', form);
       setForm({ username:'', password:'', role:'viewer' });
       await load();
-      showToast('Usuario creado');
+      showToast(l.saved);
     } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
     finally { setCreating(false); }
   };
@@ -89,27 +83,27 @@ function UsersPanel({ showToast }) {
       await axios.put(`/api/users/${id}`, body);
       setEditId(null); setEditRole(''); setEditPass('');
       await load();
-      showToast('Usuario actualizado');
+      showToast(l.saved);
     } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
   };
 
   const remove = async (id, username) => {
-    if (!window.confirm(`¿Eliminar usuario "${username}"?`)) return;
-    try { await axios.delete(`/api/users/${id}`); await load(); showToast('Usuario eliminado'); }
+    if (!window.confirm(`Delete user "${username}"?`)) return;
+    try { await axios.delete(`/api/users/${id}`); await load(); showToast(l.saved); }
     catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
   };
 
   return (
     <>
-      <Section title="Usuarios" subtitle="Gestiona quién puede acceder a NEXUS">
-        {loading ? <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Cargando...</div> : (
+      <Section title={l.usersTitle} subtitle={l.usersSubtitle}>
+        {loading ? <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Loading...</div> : (
           <div>
             {users.map(u => (
               <div key={u.id} style={s.userRow}>
                 <div style={s.userAvatar}>{u.username[0].toUpperCase()}</div>
                 <div style={s.userInfo}>
-                  <div style={s.userName2}>{u.username} {u.username === currentUser && <span style={s.youBadge}>tú</span>}</div>
-                  <div style={s.userMeta}>Creado {new Date(u.createdAt).toLocaleDateString('es-ES')}</div>
+                  <div style={s.userName2}>{u.username} {u.username === currentUser && <span style={s.youBadge}>{l.you}</span>}</div>
+                  <div style={s.userMeta}>{l.created} {new Date(u.createdAt).toLocaleDateString()}</div>
                 </div>
                 {editId === u.id ? (
                   <div style={s.editRow}>
@@ -117,7 +111,7 @@ function UsersPanel({ showToast }) {
                       <option value="admin">Admin</option>
                       <option value="viewer">Viewer</option>
                     </select>
-                    <input style={{...s.input, width:'130px'}} type="password" placeholder="Nueva contraseña" value={editPass} onChange={e => setEditPass(e.target.value)} />
+                    <input style={{...s.input, width:'130px'}} type="password" placeholder={l.newPassword} value={editPass} onChange={e => setEditPass(e.target.value)} />
                     <button style={s.saveSmallBtn} onClick={() => update(u.id)}>✓</button>
                     <button style={s.cancelBtn} onClick={() => { setEditId(null); setEditRole(''); setEditPass(''); }}>✕</button>
                   </div>
@@ -136,37 +130,29 @@ function UsersPanel({ showToast }) {
         )}
       </Section>
 
-      <Section title="Crear usuario">
-        <Field label="Usuario">
-          <input style={{...s.input, width:'180px'}} value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="nuevo_usuario" />
+      <Section title={l.createUser}>
+        <Field label={l.username2}>
+          <input style={{...s.input, width:'180px'}} value={form.username} onChange={e => setForm(p=>({...p,username:e.target.value}))} placeholder="new_user" />
         </Field>
-        <Field label="Contraseña" hint="Mínimo 6 caracteres">
+        <Field label={l.password2} hint={l.passwordHint}>
           <input style={{...s.input, width:'180px'}} type="password" value={form.password} onChange={e => setForm(p=>({...p,password:e.target.value}))} placeholder="••••••••" />
         </Field>
-        <Field label="Rol">
+        <Field label={l.role}>
           <select style={{...s.input, ...s.select}} value={form.role} onChange={e => setForm(p=>({...p,role:e.target.value}))}>
-            <option value="viewer">Viewer — solo lectura</option>
-            <option value="admin">Admin — acceso total</option>
+            <option value="viewer">{l.viewerRole}</option>
+            <option value="admin">{l.adminRole}</option>
           </select>
         </Field>
         <div style={s.fieldActions}>
           <button style={s.saveBtn} onClick={create} disabled={creating || !form.username || !form.password}>
-            {creating ? 'Creando...' : '+ Crear usuario'}
+            {creating ? l.creating : l.createBtn}
           </button>
         </div>
       </Section>
 
-      <Section title="Permisos por rol">
+      <Section title={l.permissionsTitle}>
         <div style={s.permTable}>
-          {[
-            ['Ver contenedores y métricas', true, true],
-            ['Ver logs', true, true],
-            ['Iniciar / Parar / Reiniciar', true, false],
-            ['Terminal integrada', true, false],
-            ['Gestionar usuarios', true, false],
-            ['Cambiar ajustes', true, false],
-            ['Limpiar eventos y alertas', true, false],
-          ].map(([perm, admin, viewer]) => (
+          {l.perms.map(([perm, admin, viewer]) => (
             <div key={perm} style={s.permRow}>
               <span style={s.permName}>{perm}</span>
               <span style={{...s.permCheck, color: admin?'var(--success)':'var(--danger)'}}>{admin?'✓':'✕'}</span>
@@ -185,6 +171,8 @@ function UsersPanel({ showToast }) {
 }
 
 function HostsPanel({ showToast, onHostsChange }) {
+  const { t } = useLang();
+  const l = t.settings;
   const [hosts, setHosts]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm]       = useState({ name: '', url: '' });
@@ -202,13 +190,13 @@ function HostsPanel({ showToast, onHostsChange }) {
   useEffect(() => { load(); }, []);
 
   const create = async () => {
-    if (!form.name || !form.url) return showToast('Nombre y URL requeridos', 'error');
+    if (!form.name || !form.url) return showToast('Name and URL required', 'error');
     setCreating(true);
     try {
       await axios.post('/api/hosts', form);
       setForm({ name: '', url: '' });
       await load();
-      showToast('Host añadido');
+      showToast(l.saved);
     } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
     finally { setCreating(false); }
   };
@@ -218,13 +206,13 @@ function HostsPanel({ showToast, onHostsChange }) {
       await axios.put(`/api/hosts/${id}`, editForm);
       setEditId(null);
       await load();
-      showToast('Host actualizado');
+      showToast(l.saved);
     } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
   };
 
   const remove = async (id, name) => {
-    if (!window.confirm(`¿Eliminar host "${name}"?`)) return;
-    try { await axios.delete(`/api/hosts/${id}`); await load(); showToast('Host eliminado'); }
+    if (!window.confirm(`Delete host "${name}"?`)) return;
+    try { await axios.delete(`/api/hosts/${id}`); await load(); showToast(l.saved); }
     catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
   };
 
@@ -233,22 +221,20 @@ function HostsPanel({ showToast, onHostsChange }) {
     setTestResults(p => ({ ...p, [id]: null }));
     try {
       const r = await axios.post(`/api/hosts/${id}/test`);
-      setTestResults(p => ({ ...p, [id]: { ok: true, msg: `✓ Docker ${r.data.version} · ${r.data.containers} contenedores` } }));
+      setTestResults(p => ({ ...p, [id]: { ok: true, msg: `✓ Docker ${r.data.version} · ${r.data.containers} containers` } }));
     } catch (e) {
-      setTestResults(p => ({ ...p, [id]: { ok: false, msg: e.response?.data?.error || 'Sin conexión' } }));
+      setTestResults(p => ({ ...p, [id]: { ok: false, msg: e.response?.data?.error || 'No connection' } }));
     }
     finally { setTestingId(null); }
   };
 
   return (
     <>
-      <Section title="Hosts remotos" subtitle="Conecta NEXUS a otros servidores Docker">
+      <Section title={l.hostsTitle} subtitle={l.hostsSubtitle}>
         {loading ? (
-          <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Cargando...</div>
+          <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Loading...</div>
         ) : hosts.length === 0 ? (
-          <div style={{padding:'20px 18px',color:'var(--text-muted)',fontSize:'0.85em'}}>
-            No hay hosts remotos. Añade uno abajo.
-          </div>
+          <div style={{padding:'20px 18px',color:'var(--text-muted)',fontSize:'0.85em'}}>{l.noHosts}</div>
         ) : (
           hosts.map(h => (
             <div key={h.id} style={s.hostItemRow}>
@@ -256,7 +242,7 @@ function HostsPanel({ showToast, onHostsChange }) {
               <div style={s.hostItemInfo}>
                 {editId === h.id ? (
                   <div style={s.editRow}>
-                    <input style={{...s.input, width:'120px'}} value={editForm.name} onChange={e => setEditForm(p=>({...p,name:e.target.value}))} placeholder="Nombre" />
+                    <input style={{...s.input, width:'120px'}} value={editForm.name} onChange={e => setEditForm(p=>({...p,name:e.target.value}))} placeholder="Name" />
                     <input style={{...s.input, width:'200px', fontFamily:'var(--font-mono)', fontSize:'0.8em'}} value={editForm.url} onChange={e => setEditForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
                     <button style={s.saveSmallBtn} onClick={() => update(h.id)}>✓</button>
                     <button style={s.cancelBtn} onClick={() => setEditId(null)}>✕</button>
@@ -280,7 +266,7 @@ function HostsPanel({ showToast, onHostsChange }) {
                     onClick={() => test(h.id)}
                     disabled={testingId === h.id}
                   >
-                    {testingId === h.id ? '...' : '⚡ Test'}
+                    {testingId === h.id ? '...' : l.testBtn}
                   </button>
                   <button style={s.editBtn} onClick={() => { setEditId(h.id); setEditForm({ name: h.name, url: h.url }); }}>✏</button>
                   <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗑</button>
@@ -291,24 +277,24 @@ function HostsPanel({ showToast, onHostsChange }) {
         )}
       </Section>
 
-      <Section title="Añadir host remoto">
-        <Field label="Nombre" hint="Ej: NAS, VPS, Servidor2">
-          <input style={{...s.input, width:'180px'}} value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} placeholder="Mi servidor" />
+      <Section title={l.addHost}>
+        <Field label={l.hostName} hint={l.hostNameHint}>
+          <input style={{...s.input, width:'180px'}} value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} placeholder="My server" />
         </Field>
-        <Field label="URL Docker" hint={<>Ej: <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>http://192.168.1.50:2375</code></>}>
+        <Field label={l.hostUrl} hint={<>e.g. <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>http://192.168.1.50:2375</code></>}>
           <input style={{...s.input, width:'240px', fontFamily:'var(--font-mono)', fontSize:'0.85em'}} value={form.url} onChange={e => setForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
         </Field>
         <div style={s.fieldActions}>
           <button style={s.saveBtn} onClick={create} disabled={creating || !form.name || !form.url}>
-            {creating ? 'Añadiendo...' : '+ Añadir host'}
+            {creating ? l.adding : l.addHostBtn}
           </button>
         </div>
       </Section>
 
-      <Section title="Configuración en el servidor remoto" subtitle="El servidor remoto necesita exponer la API de Docker">
+      <Section title={l.hostConfigTitle} subtitle={l.hostConfigSubtitle}>
         <div style={{padding:'14px 18px'}}>
           <div style={{fontSize:'0.82em',color:'var(--text-secondary)',marginBottom:'10px'}}>
-            Añade este servicio al <code style={s.code}>docker-compose.yml</code> del servidor remoto:
+            {l.hostConfigText} <code style={s.code}>docker-compose.yml</code>:
           </div>
           <pre style={s.codeBlock}>{`  dockerproxy:
     image: tecnativa/docker-socket-proxy:latest
@@ -324,9 +310,7 @@ function HostsPanel({ showToast, onHostsChange }) {
       - NETWORKS=1
       - STATS=1
       - POST=1`}</pre>
-          <div style={{fontSize:'0.78em',color:'var(--text-muted)',marginTop:'8px'}}>
-            ⚠ Asegúrate de que el puerto 2375 solo sea accesible desde tu red local o usa un firewall.
-          </div>
+          <div style={{fontSize:'0.78em',color:'var(--text-muted)',marginTop:'8px'}}>{l.hostConfigWarning}</div>
         </div>
       </Section>
     </>
@@ -335,11 +319,23 @@ function HostsPanel({ showToast, onHostsChange }) {
 
 export default function SettingsView({ onSettingsChange, onHostsChange }) {
   const { role } = useAuth();
+  const { t, lang, changeLang } = useLang();
+  const l = t.settings;
+
+  const REFRESH_OPTIONS = [
+    { label: l.seconds(1),  value: 1000 },
+    { label: l.seconds(3),  value: 3000 },
+    { label: l.seconds(5),  value: 5000 },
+    { label: l.seconds(15), value: 15000 },
+    { label: l.seconds(30), value: 30000 },
+    { label: l.minute,      value: 60000 },
+  ];
+
   const [settings, setSettings] = useState(null);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [toast, setToast]       = useState(null);
-  const [tab, setTab]           = useState('apariencia');
+  const [tab, setTab]           = useState('appearance');
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass]         = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -350,6 +346,11 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
     axios.get('/api/settings').then(r => setSettings(r.data)).finally(() => setLoading(false));
   }, []);
 
+  // Reset to valid tab when lang changes
+  useEffect(() => {
+    setTab('appearance');
+  }, [lang]);
+
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
   const save = async (patch) => {
@@ -357,17 +358,17 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
     try {
       const r = await axios.put('/api/settings', { ...settings, ...patch });
       setSettings(r.data); onSettingsChange?.(r.data);
-      showToast('Ajustes guardados');
-    } catch { showToast('Error al guardar', 'error'); }
+      showToast(l.saved);
+    } catch { showToast(l.errorSaving, 'error'); }
     finally { setSaving(false); }
   };
 
   const changePassword = async () => {
-    if (newPass !== confirmPass) return showToast('Las contraseñas no coinciden', 'error');
+    if (newPass !== confirmPass) return showToast('Passwords do not match', 'error');
     setPassLoading(true);
     try {
       await axios.post('/api/settings/change-password', { currentPassword: currentPass, newPassword: newPass });
-      showToast('Contraseña actualizada');
+      showToast(l.saved);
       setCurrentPass(''); setNewPass(''); setConfirmPass('');
     } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
     finally { setPassLoading(false); }
@@ -377,15 +378,26 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
     setTelegramTesting(true);
     try {
       await axios.post('/api/settings/test-telegram', { token: settings.telegram?.token, chatId: settings.telegram?.chatId });
-      showToast('Mensaje enviado ✓');
-    } catch (e) { showToast(e.response?.data?.error || 'Error con Telegram', 'error'); }
+      showToast(l.telegramSent);
+    } catch (e) { showToast(e.response?.data?.error || 'Telegram error', 'error'); }
     finally { setTelegramTesting(false); }
   };
 
   const isAdmin = role === 'admin';
+
   const TABS = isAdmin
-    ? ['apariencia', 'perfil', 'usuarios', 'hosts', 'telegram', 'sistema']
-    : ['apariencia', 'perfil'];
+    ? [
+        { id:'appearance', icon:'🎨', label: l.appearance },
+        { id:'profile',    icon:'👤', label: l.profile },
+        { id:'users',      icon:'👥', label: l.users },
+        { id:'hosts',      icon:'🖧', label: l.hosts },
+        { id:'telegram',   icon:'📱', label: l.telegram },
+        { id:'system',     icon:'⚙',  label: l.system },
+      ]
+    : [
+        { id:'appearance', icon:'🎨', label: l.appearance },
+        { id:'profile',    icon:'👤', label: l.profile },
+      ];
 
   if (loading) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'300px',gap:'12px',flexDirection:'column'}}>
@@ -398,87 +410,85 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
       {toast && <Toast msg={toast.msg} type={toast.type} />}
 
       <div style={s.subTabs}>
-        {TABS.map(t => (
-          <button key={t} style={{...s.subTab, ...(tab===t?s.subTabActive:{})}} onClick={() => setTab(t)}>
-            { {apariencia:'🎨', perfil:'👤', usuarios:'👥', hosts:'🖧', telegram:'📱', sistema:'⚙'}[t] } {t.charAt(0).toUpperCase()+t.slice(1)}
-            {tab===t && <span style={s.subTabBar} />}
+        {TABS.map(tb => (
+          <button key={tb.id} style={{...s.subTab, ...(tab===tb.id?s.subTabActive:{})}} onClick={() => setTab(tb.id)}>
+            {tb.icon} {tb.label}
+            {tab===tb.id && <span style={s.subTabBar} />}
           </button>
         ))}
       </div>
 
       <div style={s.content}>
-        {tab==='apariencia' && (
+        {tab==='appearance' && (
           <>
-            <Section title="Tema" subtitle="Modo oscuro o claro">
-              <Field label="Modo de color">
+            <Section title={l.theme} subtitle={l.themeSubtitle}>
+              <Field label={l.colorMode}>
                 <div style={s.themeToggle}>
-                  {['dark','light'].map(t => (
-                    <button key={t} style={{...s.themeBtn, ...(settings.theme===t?s.themeBtnActive:{})}} onClick={() => save({ theme: t })}>
-                      {t==='dark'?'🌙 Oscuro':'☀️ Claro'}
+                  {['dark','light'].map(tm => (
+                    <button key={tm} style={{...s.themeBtn, ...(settings.theme===tm?s.themeBtnActive:{})}} onClick={() => save({ theme: tm })}>
+                      {tm==='dark' ? l.dark : l.light}
                     </button>
                   ))}
                 </div>
               </Field>
             </Section>
-            <Section title="Color de acento">
-              <Field label="Presets">
+            <Section title={l.accentColor}>
+              <Field label={l.presets}>
                 <div style={s.accentGrid}>
                   {ACCENT_PRESETS.map(p => (
                     <button key={p.value} style={{...s.accentDot, background:p.value, outline:settings.accent===p.value?`2px solid ${p.value}`:'none', outlineOffset:'3px'}} onClick={() => save({ accent: p.value })} title={p.name} />
                   ))}
                 </div>
               </Field>
-              <Field label="Color personalizado">
+              <Field label={l.customColor}>
                 <div style={s.colorPickerRow}>
                   <input type="color" value={settings.accent||'#4f78ff'} onChange={e => setSettings(p=>({...p,accent:e.target.value}))} style={s.colorPicker} />
                   <input style={{...s.input,width:'120px',fontFamily:'var(--font-mono)'}} value={settings.accent||'#4f78ff'} onChange={e => setSettings(p=>({...p,accent:e.target.value}))} />
-                  <button style={s.saveBtn} onClick={() => save({ accent: settings.accent })} disabled={saving}>Aplicar</button>
+                  <button style={s.saveBtn} onClick={() => save({ accent: settings.accent })} disabled={saving}>{l.apply}</button>
                 </div>
               </Field>
             </Section>
           </>
         )}
 
-        {tab==='perfil' && (
-          <Section title="Cambiar contraseña">
-            <Field label="Contraseña actual"><input style={s.input} type="password" value={currentPass} onChange={e=>setCurrentPass(e.target.value)} placeholder="••••••••" /></Field>
-            <Field label="Nueva contraseña"><input style={s.input} type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="••••••••" /></Field>
-            <Field label="Confirmar"><input style={s.input} type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="••••••••" /></Field>
+        {tab==='profile' && (
+          <Section title={l.changePassword}>
+            <Field label={l.currentPassword}><input style={s.input} type="password" value={currentPass} onChange={e=>setCurrentPass(e.target.value)} placeholder="••••••••" /></Field>
+            <Field label={l.newPassword}><input style={s.input} type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="••••••••" /></Field>
+            <Field label={l.confirm}><input style={s.input} type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} placeholder="••••••••" /></Field>
             <div style={s.fieldActions}>
               <button style={s.saveBtn} onClick={changePassword} disabled={passLoading||!currentPass||!newPass||!confirmPass}>
-                {passLoading?'Guardando...':'Cambiar contraseña'}
+                {passLoading ? l.saving : l.changePasswordBtn}
               </button>
             </div>
           </Section>
         )}
 
-        {tab==='usuarios' && isAdmin && <UsersPanel showToast={showToast} />}
+        {tab==='users' && isAdmin && <UsersPanel showToast={showToast} />}
 
         {tab==='hosts' && isAdmin && <HostsPanel showToast={showToast} onHostsChange={onHostsChange} />}
 
         {tab==='telegram' && isAdmin && (
-          <>
-            <Section title="Bot de Telegram">
-              <Field label="Bot Token" hint={<>Obtén uno con <a href="https://t.me/botfather" target="_blank" rel="noreferrer" style={{color:'var(--brand-light)'}}>@BotFather</a></>}>
-                <input style={{...s.input,width:'100%',maxWidth:'360px'}} type="password" value={settings.telegram?.token||''} onChange={e=>setSettings(p=>({...p,telegram:{...p.telegram,token:e.target.value}}))} placeholder="123456:ABC..." />
-              </Field>
-              <Field label="Chat ID">
-                <input style={{...s.input,width:'180px',fontFamily:'var(--font-mono)'}} value={settings.telegram?.chatId||''} onChange={e=>setSettings(p=>({...p,telegram:{...p.telegram,chatId:e.target.value}}))} placeholder="-100123456" />
-              </Field>
-              <div style={s.fieldActions}>
-                <button style={s.saveBtn} onClick={() => save({ telegram: settings.telegram })} disabled={saving}>Guardar</button>
-                <button style={{...s.saveBtn,background:'var(--info-bg)',borderColor:'var(--info)',color:'var(--info)'}} onClick={testTelegram} disabled={telegramTesting||!settings.telegram?.token||!settings.telegram?.chatId}>
-                  {telegramTesting?'Enviando...':'📱 Probar'}
-                </button>
-              </div>
-            </Section>
-          </>
+          <Section title={l.telegramTitle}>
+            <Field label={l.telegramToken} hint={<>{l.telegramTokenHint} <a href="https://t.me/botfather" target="_blank" rel="noreferrer" style={{color:'var(--brand-light)'}}>@BotFather</a></>}>
+              <input style={{...s.input,width:'100%',maxWidth:'360px'}} type="password" value={settings.telegram?.token||''} onChange={e=>setSettings(p=>({...p,telegram:{...p.telegram,token:e.target.value}}))} placeholder="123456:ABC..." />
+            </Field>
+            <Field label={l.telegramChatId}>
+              <input style={{...s.input,width:'180px',fontFamily:'var(--font-mono)'}} value={settings.telegram?.chatId||''} onChange={e=>setSettings(p=>({...p,telegram:{...p.telegram,chatId:e.target.value}}))} placeholder="-100123456" />
+            </Field>
+            <div style={s.fieldActions}>
+              <button style={s.saveBtn} onClick={() => save({ telegram: settings.telegram })} disabled={saving}>{l.save}</button>
+              <button style={{...s.saveBtn,background:'var(--info-bg)',borderColor:'var(--info)',color:'var(--info)'}} onClick={testTelegram} disabled={telegramTesting||!settings.telegram?.token||!settings.telegram?.chatId}>
+                {telegramTesting ? l.telegramTesting : l.telegramTest}
+              </button>
+            </div>
+          </Section>
         )}
 
-        {tab==='sistema' && isAdmin && (
+        {tab==='system' && isAdmin && (
           <>
-            <Section title="Intervalo de refresco">
-              <Field label="Intervalo">
+            <Section title={l.refreshInterval}>
+              <Field label={l.interval}>
                 <div style={s.radioGroup}>
                   {REFRESH_OPTIONS.map(o => (
                     <label key={o.value} style={s.radioLabel}>
@@ -489,10 +499,19 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
                 </div>
               </Field>
             </Section>
-            <Section title="Sobre NEXUS">
-              <Field label="Versión"><span style={s.mono}>1.0.0</span></Field>
-              <Field label="Stack"><span style={s.mono}>Node.js · React 18 · Socket.io</span></Field>
-              <Field label="Autor"><span style={{color:'var(--brand-light)'}}>alvaro_lab</span></Field>
+            <Section title={l.aboutTitle}>
+              <Field label={l.version}><span style={s.mono}>1.2.0</span></Field>
+              <Field label={l.stack}><span style={s.mono}>Node.js · React 18 · Socket.io</span></Field>
+              <Field label={l.author}><span style={{color:'var(--brand-light)'}}>alvaro_lab</span></Field>
+              <Field label={l.language}>
+                <div style={s.themeToggle}>
+                  {[{id:'en',flag:'🇬🇧',label:'English'},{id:'es',flag:'🇪🇸',label:'Español'}].map(lg => (
+                    <button key={lg.id} style={{...s.themeBtn, ...(lang===lg.id?s.themeBtnActive:{})}} onClick={() => changeLang(lg.id)}>
+                      {lg.flag} {lg.label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
             </Section>
           </>
         )}
@@ -540,7 +559,6 @@ const s = {
   mono:{fontFamily:'var(--font-mono)',fontSize:'0.82em',color:'var(--text-secondary)'},
   code:{fontFamily:'var(--font-mono)',fontSize:'0.85em',color:'var(--brand-light)'},
   codeBlock:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px',fontSize:'0.78em',fontFamily:'var(--font-mono)',color:'var(--text-secondary)',overflowX:'auto',lineHeight:1.6},
-  // Users panel
   userRow:{display:'flex',alignItems:'center',gap:'12px',padding:'10px 18px',borderTop:'1px solid var(--border)'},
   userAvatar:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.85em',fontWeight:700,color:'var(--brand-light)',flexShrink:0},
   userInfo:{flex:1,minWidth:0},
@@ -554,7 +572,6 @@ const s = {
   permRow:{display:'flex',alignItems:'center',padding:'8px 18px',borderTop:'1px solid var(--border)'},
   permName:{flex:1,fontSize:'0.82em',color:'var(--text-secondary)'},
   permCheck:{width:'80px',textAlign:'center',fontSize:'0.85em',fontWeight:600},
-  // Hosts panel
   hostItemRow:{display:'flex',alignItems:'center',gap:'12px',padding:'10px 18px',borderTop:'1px solid var(--border)'},
   hostItemIcon:{fontSize:'1.1em',flexShrink:0},
   hostItemInfo:{flex:1,minWidth:0},

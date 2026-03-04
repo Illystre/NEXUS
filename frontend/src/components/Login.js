@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
+import { useLang } from './LanguageContext';
 
 export default function Login() {
   const { login } = useAuth();
+  const { t, lang, changeLang } = useLang();
+  const l = t.login;
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
@@ -12,7 +15,7 @@ export default function Login() {
     if (!user || !pass) return;
     setLoading(true); setError('');
     try { await login(user, pass); }
-    catch { setError('Credenciales incorrectas. Inténtalo de nuevo.'); setLoading(false); }
+    catch { setError(l.error); setLoading(false); }
   };
 
   return (
@@ -43,13 +46,13 @@ export default function Login() {
           </div>
           <div style={s.heroText}>
             <h1 style={s.heroH1}>Infrastructure<br />at a glance.</h1>
-            <p style={s.heroP}>Monitoriza, controla y gestiona todos tus contenedores Docker desde un único panel centralizado.</p>
+            <p style={s.heroP}>{l.tagline}</p>
           </div>
           <div style={s.stats}>
-            {[['Real-time','Métricas en vivo'],['Secure','Auth JWT'],['Fast','Actualización 3s']].map(([v,l]) => (
+            {[[l.realtime, l.realtimeSub],[l.secure, l.secureSub],[l.fast, l.fastSub]].map(([v, lb]) => (
               <div key={v} style={s.statItem}>
                 <div style={s.statVal}>{v}</div>
-                <div style={s.statLbl}>{l}</div>
+                <div style={s.statLbl}>{lb}</div>
               </div>
             ))}
           </div>
@@ -70,19 +73,27 @@ export default function Login() {
           </div>
         </div>
 
+        <div style={s.langToggle}>
+          {['en','es'].map(lg => (
+            <button key={lg} style={{...s.langBtn, ...(lang===lg?s.langBtnActive:{})}} onClick={() => changeLang(lg)}>
+              {lg === 'en' ? '🇬🇧 EN' : '🇪🇸 ES'}
+            </button>
+          ))}
+        </div>
+
         <div className="login-wrap" style={s.formWrap}>
           <div style={s.formHeader}>
-            <h2 style={s.formTitle}>Bienvenido de nuevo</h2>
-            <p style={s.formSub}>Accede con tus credenciales de administrador</p>
+            <h2 style={s.formTitle}>{l.welcome}</h2>
+            <p style={s.formSub}>{l.subtitle}</p>
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Usuario</label>
+            <label style={s.label}>{l.username}</label>
             <input style={s.input} value={user} onChange={e => setUser(e.target.value)} onKeyDown={e => e.key==='Enter' && handleSubmit()} placeholder="admin" autoFocus />
           </div>
 
           <div style={s.field}>
-            <label style={s.label}>Contraseña</label>
+            <label style={s.label}>{l.password}</label>
             <input style={s.input} type="password" value={pass} onChange={e => setPass(e.target.value)} onKeyDown={e => e.key==='Enter' && handleSubmit()} placeholder="••••••••••" />
           </div>
 
@@ -91,11 +102,11 @@ export default function Login() {
           )}
 
           <button style={{...s.btn, opacity: loading ? 0.7 : 1}} onClick={handleSubmit} disabled={loading}>
-            {loading ? <span style={s.btnInner}><div style={s.spinner} />Verificando...</span> : 'Iniciar sesión'}
+            {loading ? <span style={s.btnInner}><div style={s.spinner} />{l.verifying}</span> : l.submit}
           </button>
 
           <div style={s.footer}>
-            <span style={s.footerText}>NEXUS v1.0 · alvaro_lab</span>
+            <span style={s.footerText}>NEXUS v1.2 · alvaro_lab</span>
           </div>
         </div>
       </div>
@@ -118,10 +129,13 @@ const s = {
   statItem: {},
   statVal: { fontWeight:700, fontSize:'0.95em', color:'var(--brand-light)', marginBottom:'2px' },
   statLbl: { fontSize:'0.72em', color:'var(--text-muted)', letterSpacing:'0.04em' },
-  rightPanel: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', background:'var(--bg)' },
+  rightPanel: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', background:'var(--bg)', position:'relative' },
   mobileLogoWrap: { display:'none' },
   mobileLogo: { display:'flex', alignItems:'center', gap:'10px', marginBottom:'32px' },
   mobileLogoText: { fontWeight:700, fontSize:'1.1em', letterSpacing:'0.15em' },
+  langToggle: { position:'absolute', top:'20px', right:'20px', display:'flex', gap:'4px', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'3px' },
+  langBtn: { padding:'5px 10px', background:'transparent', border:'none', borderRadius:'var(--radius-sm)', color:'var(--text-muted)', fontFamily:'var(--font-sans)', fontSize:'0.78em', fontWeight:500, cursor:'pointer' },
+  langBtnActive: { background:'var(--bg-elevated)', color:'var(--text-primary)' },
   formWrap: { width:'100%', maxWidth:'380px' },
   formHeader: { marginBottom:'32px' },
   formTitle: { fontSize:'1.5em', fontWeight:700, marginBottom:'6px', letterSpacing:'-0.01em' },

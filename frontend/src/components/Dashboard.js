@@ -8,6 +8,7 @@ import TableView from './TableView';
 import SettingsView from './SettingsView';
 import EventsView from './EventsView';
 import AlertPanel from './AlertPanel';
+import { useLang } from './LanguageContext';
 
 function applyTheme(settings) {
   if (!settings) return;
@@ -40,6 +41,10 @@ function applyTheme(settings) {
 
 export default function Dashboard() {
   const { user, role, logout } = useAuth();
+  const { t, lang, changeLang } = useLang();
+  const n = t.nav;
+  const d = t.dashboard;
+
   const [tab, setTab]               = useState('stacks');
   const [containers, setContainers] = useState([]);
   const [info, setInfo]             = useState(null);
@@ -99,15 +104,15 @@ export default function Dashboard() {
   const stacks  = [...new Set(containers.map(c => c.stack).filter(Boolean))].length;
 
   const currentHostName = selectedHost === 'local'
-    ? 'Local'
+    ? d.local
     : hosts.find(h => h.id === selectedHost)?.name || selectedHost;
 
   const NAV_MAIN = [
-    { id:'stacks',  icon:'⊞', label:'Stacks' },
-    { id:'table',   icon:'≡', label:'Tabla compacta' },
-    { id:'all',     icon:'▦', label:'Tarjetas' },
-    { id:'metrics', icon:'◈', label:'Métricas' },
-    { id:'events',  icon:'📋', label:'Eventos' },
+    { id:'stacks',  icon:'⊞', label: n.stacks },
+    { id:'table',   icon:'≡', label: n.table },
+    { id:'all',     icon:'▦', label: n.cards },
+    { id:'metrics', icon:'◈', label: n.metrics },
+    { id:'events',  icon:'📋', label: n.events },
   ];
 
   const handleNavClick = (id) => { setTab(id); setSidebarOpen(false); };
@@ -132,13 +137,13 @@ export default function Dashboard() {
 
           {hosts.length > 0 && (
             <div style={s.hostSelectorWrap}>
-              <div style={s.hostSelectorLabel}>SERVIDOR</div>
+              <div style={s.hostSelectorLabel}>{n.server}</div>
               <select
                 style={s.hostSelect}
                 value={selectedHost}
                 onChange={e => { setSelectedHost(e.target.value); setLoading(true); }}
               >
-                <option value="local">🖥 Local</option>
+                <option value="local">🖥 {d.local}</option>
                 {hosts.map(h => (
                   <option key={h.id} value={h.id}>🌐 {h.name}</option>
                 ))}
@@ -147,18 +152,18 @@ export default function Dashboard() {
           )}
 
           <nav style={s.nav}>
-            <div style={s.navSection}>VISTAS</div>
-            {NAV_MAIN.map(n => (
-              <button key={n.id} style={{...s.navItem, ...(tab===n.id?s.navItemActive:{})}} onClick={() => handleNavClick(n.id)}>
-                <span style={s.navIcon}>{n.icon}</span>
-                <span>{n.label}</span>
-                {tab===n.id && <span style={s.navActiveBar} />}
+            <div style={s.navSection}>{n.views}</div>
+            {NAV_MAIN.map(nv => (
+              <button key={nv.id} style={{...s.navItem, ...(tab===nv.id?s.navItemActive:{})}} onClick={() => handleNavClick(nv.id)}>
+                <span style={s.navIcon}>{nv.icon}</span>
+                <span>{nv.label}</span>
+                {tab===nv.id && <span style={s.navActiveBar} />}
               </button>
             ))}
-            <div style={{...s.navSection, marginTop:'8px'}}>CUENTA</div>
+            <div style={{...s.navSection, marginTop:'8px'}}>{n.account}</div>
             <button style={{...s.navItem, ...(tab==='settings'?s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
               <span style={s.navIcon}>⚙</span>
-              <span>Ajustes</span>
+              <span>{n.settings}</span>
               {unreadAlerts > 0 && (
                 <span style={s.alertBadge}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
               )}
@@ -185,7 +190,7 @@ export default function Dashboard() {
                 }
               </div>
             </div>
-            <button style={s.logoutBtn} onClick={logout} title="Cerrar sesión">⎋</button>
+            <button style={s.logoutBtn} onClick={logout} title="Logout">⎋</button>
           </div>
         </div>
       </aside>
@@ -194,21 +199,21 @@ export default function Dashboard() {
         <header style={s.topbar}>
           <div style={s.topbarLeft}>
             <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
-            <h1 style={s.pageTitle}>{[...NAV_MAIN, {id:'settings',label:'Ajustes'}].find(n=>n.id===tab)?.label}</h1>
+            <h1 style={s.pageTitle}>{[...NAV_MAIN, {id:'settings',label:n.settings}].find(nv=>nv.id===tab)?.label}</h1>
             {hosts.length > 0 && (
               <span style={s.hostBadge}>
                 {selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}
               </span>
             )}
             {lastRefresh && tab !== 'settings' && (
-              <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString('es-ES')}</span>
+              <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString()}</span>
             )}
           </div>
           <div style={s.topbarRight}>
             {tab !== 'settings' && (
               <>
                 <div className="metric-pills-desktop" style={s.metricPills}>
-                  {[{dot:'var(--success)',num:running,lbl:'running'},{dot:'var(--danger)',num:stopped,lbl:'stopped'},{dot:'var(--brand)',num:stacks,lbl:'stacks'}].map(m => (
+                  {[{dot:'var(--success)',num:running,lbl:d.running},{dot:'var(--danger)',num:stopped,lbl:d.stopped},{dot:'var(--brand)',num:stacks,lbl:d.stacks}].map(m => (
                     <div key={m.lbl} style={s.metricPill}>
                       <span style={{...s.dot, background:m.dot}} />
                       <span style={s.metricNum}>{m.num}</span>
@@ -219,13 +224,20 @@ export default function Dashboard() {
                 <span style={s.mobileRunning}><span style={{...s.dot,background:'var(--success)'}} />{running}</span>
               </>
             )}
+            <div style={s.langToggle}>
+              {['en','es'].map(lg => (
+                <button key={lg} style={{...s.langBtn, ...(lang===lg?s.langBtnActive:{})}} onClick={() => changeLang(lg)}>
+                  {lg === 'en' ? '🇬🇧' : '🇪🇸'}
+                </button>
+              ))}
+            </div>
             <AlertPanel onUnreadChange={setUnreadAlerts} />
             <button style={s.refreshBtn} onClick={fetchAll}>↺</button>
           </div>
         </header>
 
         <div className="nexus-content" style={s.content}>
-          {loading && tab !== 'settings' ? <Loader /> : (
+          {loading && tab !== 'settings' ? <Loader msg={d.loading} /> : (
             <div key={tab + selectedHost} className="fade-up">
               {tab==='stacks'   && <StackView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
               {tab==='table'    && <TableView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
@@ -241,11 +253,11 @@ export default function Dashboard() {
   );
 }
 
-function Loader() {
+function Loader({ msg }) {
   return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'300px',flexDirection:'column',gap:'12px'}}>
       <div style={{width:'22px',height:'22px',border:'2px solid var(--border)',borderTop:'2px solid var(--brand)',borderRadius:'50%',animation:'spin 0.7s linear infinite'}} />
-      <span style={{color:'var(--text-muted)',fontSize:'0.85em'}}>Cargando...</span>
+      <span style={{color:'var(--text-muted)',fontSize:'0.85em'}}>{msg}</span>
     </div>
   );
 }
@@ -293,6 +305,9 @@ const s = {
   metricNum:{fontSize:'0.85em',fontWeight:600},
   metricLbl:{fontSize:'0.75em',color:'var(--text-muted)'},
   mobileRunning:{display:'flex',alignItems:'center',gap:'5px',fontSize:'0.85em',fontWeight:600,color:'var(--success)'},
+  langToggle:{display:'flex',gap:'2px',background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'2px'},
+  langBtn:{padding:'4px 7px',background:'transparent',border:'none',borderRadius:'var(--radius-sm)',cursor:'pointer',fontSize:'0.85em'},
+  langBtnActive:{background:'var(--bg-elevated)'},
   refreshBtn:{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'6px 10px',color:'var(--text-secondary)',fontFamily:'var(--font-sans)',fontSize:'0.9em',cursor:'pointer'},
   content:{flex:1,overflow:'auto',padding:'20px 24px'},
 };
