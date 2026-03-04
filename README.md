@@ -76,7 +76,7 @@ services:
       - "9090:3001"
     environment:
       - ADMIN_USER=admin
-      - ADMIN_PASS=yourpassword
+      - ADMIN_PASS=admin123
       - JWT_SECRET=your_secret_key_here
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
