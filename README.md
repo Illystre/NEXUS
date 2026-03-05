@@ -136,10 +136,10 @@ docker compose up --build -d
 - [x] Language selector in Settings → System
 
 ### v1.3.0 — Container Management
-- [ ] Create containers from UI (guided form)
-- [ ] Docker Compose editor with syntax highlighting
-- [ ] Deploy stacks directly from the interface
-- [ ] Edit and delete existing stacks
+- [x] Deploy stacks directly from the interface
+- [x] Create containers from UI (guided form)
+- [x] Edit and delete existing stacks
+- [x] Docker Compose editor with syntax highlighting
 
 ### v1.4.0 — Image Management
 - [ ] List local images
