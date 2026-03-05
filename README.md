@@ -135,7 +135,7 @@ docker compose up --build -d
 - [x] Language selector on Login screen
 - [x] Language selector in Settings → System
 
-### v1.3.0 — Container Management
+### v1.3.0 ✅ — Container Management
 - [x] Deploy stacks directly from the interface
 - [x] Create containers from UI (guided form)
 - [x] Edit and delete existing stacks
