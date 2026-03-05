@@ -46,6 +46,13 @@ export default function TableView({ containers, onAction, isViewer }) {
     setTimeout(() => setActionLoading(null), 1500);
   };
 
+  const doDelete = async (id, name) => {
+    if (!window.confirm(`Delete container "${name}"?`)) return;
+    setActionLoading(id + 'delete');
+    await onAction(id, 'delete');
+    setTimeout(() => setActionLoading(null), 1500);
+  };
+
   const filtered = containers
     .filter(c => {
       if (filter === 'running' && c.state !== 'running') return false;
@@ -148,6 +155,7 @@ export default function TableView({ containers, onAction, isViewer }) {
                       }
                       <TBtn label="↺"              color="var(--text-secondary)" loading={actionLoading===c.id+'restart'} onClick={() => doAction(c.id,'restart')} />
                       {isRunning && <TBtn label={`⌨ ${la.terminal}`} color="var(--brand-light)" onClick={() => setTerminal(c)} />}
+                      {!isViewer && !isRunning && <TBtn label="🗑" color="var(--danger)" loading={actionLoading===c.id+'delete'} onClick={() => doDelete(c.id, c.name)} />}
                     </div>
                   </td>
                 </tr>

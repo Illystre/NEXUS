@@ -189,6 +189,17 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
 });
 
 app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
+
+app.delete('/api/containers/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const container = docker.getContainer(req.params.id);
+    try { await container.stop(); } catch {}
+    await container.remove({ force: true });
+    logEvent({ type: 'container:delete', actor: req.user.username, target: req.params.id.substring(0,12), detail: 'Container removed' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
   try {
     const docker = getDocker(req.query.host);
     res.json(await docker.getContainer(req.params.id).inspect());

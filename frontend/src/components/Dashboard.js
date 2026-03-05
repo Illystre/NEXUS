@@ -96,7 +96,11 @@ export default function Dashboard() {
 
   const handleAction = async (id, action) => {
     if (isViewer) return;
-    await axios.post(`/api/containers/${id}/${action}${hostParam}`);
+    if (action === 'delete') {
+      await axios.delete(`/api/containers/${id}${hostParam}`);
+    } else {
+      await axios.post(`/api/containers/${id}/${action}${hostParam}`);
+    }
     setTimeout(fetchAll, 800);
   };
 
@@ -113,11 +117,11 @@ export default function Dashboard() {
     { id:'table',   icon:'≡', label: n.table },
     { id:'all',     icon:'▦', label: n.cards },
     { id:'metrics', icon:'◈', label: n.metrics },
-    { id:'events',  icon:'📋', label: n.events },
+    { id:'events',  icon:'▤', label: n.events },
   ];
 
   const NAV_DEPLOY = isAdmin ? [
-    { id:'deploy', icon:'🚀', label: n.deploy },
+    { id:'deploy', icon:'⊕', label: n.deploy },
   ] : [];
 
   const handleNavClick = (id) => { setTab(id); setSidebarOpen(false); };
