@@ -8,6 +8,7 @@ import TableView from './TableView';
 import SettingsView from './SettingsView';
 import EventsView from './EventsView';
 import AlertPanel from './AlertPanel';
+import DeployView from './DeployView';
 import { useLang } from './LanguageContext';
 
 function applyTheme(settings) {
@@ -115,7 +116,13 @@ export default function Dashboard() {
     { id:'events',  icon:'📋', label: n.events },
   ];
 
+  const NAV_DEPLOY = isAdmin ? [
+    { id:'deploy', icon:'🚀', label: n.deploy },
+  ] : [];
+
   const handleNavClick = (id) => { setTab(id); setSidebarOpen(false); };
+
+  const allNavItems = [...NAV_MAIN, ...NAV_DEPLOY, { id:'settings', label: n.settings }];
 
   return (
     <div style={s.shell}>
@@ -138,15 +145,9 @@ export default function Dashboard() {
           {hosts.length > 0 && (
             <div style={s.hostSelectorWrap}>
               <div style={s.hostSelectorLabel}>{n.server}</div>
-              <select
-                style={s.hostSelect}
-                value={selectedHost}
-                onChange={e => { setSelectedHost(e.target.value); setLoading(true); }}
-              >
+              <select style={s.hostSelect} value={selectedHost} onChange={e => { setSelectedHost(e.target.value); setLoading(true); }}>
                 <option value="local">🖥 {d.local}</option>
-                {hosts.map(h => (
-                  <option key={h.id} value={h.id}>🌐 {h.name}</option>
-                ))}
+                {hosts.map(h => <option key={h.id} value={h.id}>🌐 {h.name}</option>)}
               </select>
             </div>
           )}
@@ -160,17 +161,30 @@ export default function Dashboard() {
                 {tab===nv.id && <span style={s.navActiveBar} />}
               </button>
             ))}
+
+            {NAV_DEPLOY.length > 0 && (
+              <>
+                <div style={{...s.navSection, marginTop:'8px'}}>{n.manage}</div>
+                {NAV_DEPLOY.map(nv => (
+                  <button key={nv.id} style={{...s.navItem, ...(tab===nv.id?s.navItemActive:{})}} onClick={() => handleNavClick(nv.id)}>
+                    <span style={s.navIcon}>{nv.icon}</span>
+                    <span>{nv.label}</span>
+                    {tab===nv.id && <span style={s.navActiveBar} />}
+                  </button>
+                ))}
+              </>
+            )}
+
             <div style={{...s.navSection, marginTop:'8px'}}>{n.account}</div>
             <button style={{...s.navItem, ...(tab==='settings'?s.navItemActive:{})}} onClick={() => handleNavClick('settings')}>
               <span style={s.navIcon}>⚙</span>
               <span>{n.settings}</span>
-              {unreadAlerts > 0 && (
-                <span style={s.alertBadge}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>
-              )}
+              {unreadAlerts > 0 && <span style={s.alertBadge}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</span>}
               {tab==='settings' && <span style={s.navActiveBar} />}
             </button>
           </nav>
         </div>
+
         <div style={s.sidebarBottom}>
           {info && (
             <div style={s.hostInfo}>
@@ -184,10 +198,7 @@ export default function Dashboard() {
             <div style={s.userInfo}>
               <div style={s.userName}>{user}</div>
               <div style={s.userRole}>
-                {isViewer
-                  ? <span style={{color:'var(--text-muted)'}}>Viewer</span>
-                  : <span style={{color:'var(--brand-light)'}}>Administrator</span>
-                }
+                {isViewer ? <span style={{color:'var(--text-muted)'}}>Viewer</span> : <span style={{color:'var(--brand-light)'}}>Administrator</span>}
               </div>
             </div>
             <button style={s.logoutBtn} onClick={logout} title="Logout">⎋</button>
@@ -199,18 +210,16 @@ export default function Dashboard() {
         <header style={s.topbar}>
           <div style={s.topbarLeft}>
             <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
-            <h1 style={s.pageTitle}>{[...NAV_MAIN, {id:'settings',label:n.settings}].find(nv=>nv.id===tab)?.label}</h1>
+            <h1 style={s.pageTitle}>{allNavItems.find(nv=>nv.id===tab)?.label}</h1>
             {hosts.length > 0 && (
-              <span style={s.hostBadge}>
-                {selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}
-              </span>
+              <span style={s.hostBadge}>{selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}</span>
             )}
-            {lastRefresh && tab !== 'settings' && (
+            {lastRefresh && tab !== 'settings' && tab !== 'deploy' && (
               <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString()}</span>
             )}
           </div>
           <div style={s.topbarRight}>
-            {tab !== 'settings' && (
+            {tab !== 'settings' && tab !== 'deploy' && (
               <>
                 <div className="metric-pills-desktop" style={s.metricPills}>
                   {[{dot:'var(--success)',num:running,lbl:d.running},{dot:'var(--danger)',num:stopped,lbl:d.stopped},{dot:'var(--brand)',num:stacks,lbl:d.stacks}].map(m => (
@@ -237,14 +246,15 @@ export default function Dashboard() {
         </header>
 
         <div className="nexus-content" style={s.content}>
-          {loading && tab !== 'settings' ? <Loader msg={d.loading} /> : (
+          {loading && tab !== 'settings' && tab !== 'deploy' ? <Loader msg={d.loading} /> : (
             <div key={tab + selectedHost} className="fade-up">
-              {tab==='stacks'   && <StackView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='table'    && <TableView      containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='all'      && <ContainerList  containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='metrics'  && <MetricsView    containers={containers} hostParam={hostParam} />}
+              {tab==='stacks'   && <StackView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='table'    && <TableView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='all'      && <ContainerList containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='metrics'  && <MetricsView   containers={containers} hostParam={hostParam} />}
               {tab==='events'   && <EventsView />}
-              {tab==='settings' && <SettingsView   onSettingsChange={handleSettingsChange} onHostsChange={setHosts} />}
+              {tab==='deploy'   && <DeployView    onContainersRefresh={fetchAll} />}
+              {tab==='settings' && <SettingsView  onSettingsChange={handleSettingsChange} onHostsChange={setHosts} />}
             </div>
           )}
         </div>

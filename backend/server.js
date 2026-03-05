@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { execSync, exec } = require('child_process');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,17 +19,17 @@ const DATA_DIR      = process.env.DATA_DIR || '/data';
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const USERS_FILE    = path.join(DATA_DIR, 'users.json');
 const HOSTS_FILE    = path.join(DATA_DIR, 'hosts.json');
+const STACKS_DIR    = path.join(DATA_DIR, 'stacks');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
-if (fs.existsSync(PUBLIC_DIR)) {
-  app.use(express.static(PUBLIC_DIR));
-}
+if (fs.existsSync(PUBLIC_DIR)) app.use(express.static(PUBLIC_DIR));
 
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(STACKS_DIR)) fs.mkdirSync(STACKS_DIR, { recursive: true });
 }
 
 function loadSettings() {
@@ -57,13 +58,9 @@ function getDocker(hostId) {
   if (!hostId || hostId === 'local') return localDocker;
   const hosts = loadHosts();
   const host = hosts.find(h => h.id === hostId);
-  if (!host) throw new Error(`Host '${hostId}' no encontrado`);
+  if (!host) throw new Error(`Host '${hostId}' not found`);
   const urlObj = new URL(host.url);
-  return new Docker({
-    host: urlObj.hostname,
-    port: parseInt(urlObj.port) || 2375,
-    protocol: urlObj.protocol.replace(':', '')
-  });
+  return new Docker({ host: urlObj.hostname, port: parseInt(urlObj.port) || 2375, protocol: urlObj.protocol.replace(':', '') });
 }
 
 const events = [];
@@ -85,30 +82,29 @@ function authMiddleware(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores' });
+  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
   next();
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   const user = users.find(u => u.username === username);
   if (!user || !bcrypt.compareSync(password, user.passwordHash))
-    return res.status(401).json({ error: 'Credenciales incorrectas' });
+    return res.status(401).json({ error: 'Invalid credentials' });
   const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
-  logEvent({ type: 'login', actor: username, detail: `Login desde IP ${req.ip}` });
+  logEvent({ type: 'login', actor: username, detail: `Login from IP ${req.ip}` });
   res.json({ token, role: user.role });
 });
 
-// ── Hosts ────────────────────────────────────────────────────────────────────
-app.get('/api/hosts', authMiddleware, (req, res) => {
-  res.json(loadHosts());
-});
+// ── Hosts ─────────────────────────────────────────────────────────────────────
+app.get('/api/hosts', authMiddleware, (req, res) => res.json(loadHosts()));
 
 app.post('/api/hosts', authMiddleware, adminOnly, (req, res) => {
   const { name, url } = req.body;
-  if (!name || !url) return res.status(400).json({ error: 'Nombre y URL requeridos' });
+  if (!name || !url) return res.status(400).json({ error: 'Name and URL required' });
   const hosts = loadHosts();
-  if (hosts.find(h => h.name === name)) return res.status(400).json({ error: 'Ya existe un host con ese nombre' });
+  if (hosts.find(h => h.name === name)) return res.status(400).json({ error: 'Host already exists' });
   const newHost = { id: `host_${Date.now()}`, name, url, createdAt: new Date().toISOString() };
   hosts.push(newHost);
   saveHosts(hosts);
@@ -119,7 +115,7 @@ app.post('/api/hosts', authMiddleware, adminOnly, (req, res) => {
 app.put('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
   const hosts = loadHosts();
   const host = hosts.find(h => h.id === req.params.id);
-  if (!host) return res.status(404).json({ error: 'Host no encontrado' });
+  if (!host) return res.status(404).json({ error: 'Host not found' });
   const { name, url } = req.body;
   if (name) host.name = name;
   if (url) host.url = url;
@@ -131,7 +127,7 @@ app.put('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
 app.delete('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
   const hosts = loadHosts();
   const idx = hosts.findIndex(h => h.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'Host no encontrado' });
+  if (idx === -1) return res.status(404).json({ error: 'Host not found' });
   const deleted = hosts.splice(idx, 1)[0];
   saveHosts(hosts);
   logEvent({ type: 'host:deleted', actor: req.user.username, target: deleted.name });
@@ -143,12 +139,10 @@ app.post('/api/hosts/:id/test', authMiddleware, adminOnly, async (req, res) => {
     const docker = getDocker(req.params.id);
     const info = await docker.info();
     res.json({ ok: true, version: info.ServerVersion, containers: info.Containers });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
-// ── Containers ───────────────────────────────────────────────────────────────
+// ── Containers ────────────────────────────────────────────────────────────────
 app.get('/api/containers', authMiddleware, async (req, res) => {
   try {
     const docker = getDocker(req.query.host);
@@ -181,7 +175,7 @@ app.get('/api/containers/:id/stats', authMiddleware, async (req, res) => {
 
 app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, res) => {
   const { id, action } = req.params;
-  if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Acción no permitida' });
+  if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Action not allowed' });
   try {
     const docker = getDocker(req.query.host);
     if (!req.query.host || req.query.host === 'local') markManualStop(id);
@@ -189,7 +183,7 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
     const containers = await docker.listContainers({ all: true });
     const c = containers.find(c => c.Id === id);
     const name = c?.Names[0]?.replace('/', '') || id.substring(0, 12);
-    logEvent({ type: `container:${action}`, actor: req.user.username, target: name, detail: `${action} ejecutado manualmente` });
+    logEvent({ type: `container:${action}`, actor: req.user.username, target: name, detail: `${action} executed manually` });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -201,7 +195,222 @@ app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0' }));
+// ── Container Create ──────────────────────────────────────────────────────────
+app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) => {
+  const { name, image, ports, envVars, volumes, restart, network, cmd } = req.body;
+  if (!image) return res.status(400).json({ error: 'Image is required' });
+
+  try {
+    const docker = getDocker(req.query.host);
+
+    // Pull image first
+    await new Promise((resolve, reject) => {
+      docker.pull(image, (err, stream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (err) => err ? reject(err) : resolve());
+      });
+    });
+
+    // Build port bindings
+    const ExposedPorts = {};
+    const PortBindings = {};
+    (ports || []).forEach(p => {
+      if (p.container && p.host) {
+        const key = `${p.container}/tcp`;
+        ExposedPorts[key] = {};
+        PortBindings[key] = [{ HostPort: String(p.host) }];
+      }
+    });
+
+    // Build volume bindings
+    const Binds = (volumes || [])
+      .filter(v => v.host && v.container)
+      .map(v => `${v.host}:${v.container}${v.readonly ? ':ro' : ''}`);
+
+    // Build env
+    const Env = (envVars || [])
+      .filter(e => e.key)
+      .map(e => `${e.key}=${e.value || ''}`);
+
+    const container = await docker.createContainer({
+      name: name || undefined,
+      Image: image,
+      ExposedPorts,
+      Env,
+      Cmd: cmd ? cmd.split(' ') : undefined,
+      HostConfig: {
+        PortBindings,
+        Binds,
+        RestartPolicy: { Name: restart || 'unless-stopped' },
+        NetworkMode: network || 'bridge',
+      },
+    });
+
+    await container.start();
+    logEvent({ type: 'container:create', actor: req.user.username, target: name || image, detail: `Image: ${image}` });
+    res.json({ ok: true, id: container.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Stacks ────────────────────────────────────────────────────────────────────
+app.get('/api/stacks', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const containers = await docker.listContainers({ all: true });
+
+    // Group by compose project
+    const stackMap = {};
+    containers.forEach(c => {
+      const project = c.Labels['com.docker.compose.project'];
+      if (!project) return;
+      if (!stackMap[project]) stackMap[project] = { name: project, containers: [], running: 0, total: 0 };
+      stackMap[project].containers.push({
+        id: c.Id,
+        name: c.Names[0]?.replace('/', '') || c.Id.substring(0, 12),
+        state: c.State,
+        service: c.Labels['com.docker.compose.service'] || '',
+      });
+      stackMap[project].total++;
+      if (c.State === 'running') stackMap[project].running++;
+    });
+
+    // Check for saved compose files
+    ensureDir();
+    const saved = fs.existsSync(STACKS_DIR)
+      ? fs.readdirSync(STACKS_DIR).filter(f => f.endsWith('.yml')).map(f => f.replace('.yml', ''))
+      : [];
+
+    const result = Object.values(stackMap).map(s => ({
+      ...s,
+      hasComposeFile: saved.includes(s.name),
+      composeContent: saved.includes(s.name)
+        ? fs.readFileSync(path.join(STACKS_DIR, `${s.name}.yml`), 'utf8')
+        : null,
+    }));
+
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/stacks/:name/compose', authMiddleware, (req, res) => {
+  const filePath = path.join(STACKS_DIR, `${req.params.name}.yml`);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Compose file not found' });
+  res.json({ content: fs.readFileSync(filePath, 'utf8') });
+});
+
+app.post('/api/stacks/deploy', authMiddleware, adminOnly, async (req, res) => {
+  const { name, content } = req.body;
+  if (!name || !content) return res.status(400).json({ error: 'Name and content required' });
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) return res.status(400).json({ error: 'Invalid stack name' });
+
+  try {
+    ensureDir();
+    const filePath = path.join(STACKS_DIR, `${name}.yml`);
+    fs.writeFileSync(filePath, content, 'utf8');
+
+    // Run docker compose up
+    await new Promise((resolve, reject) => {
+      exec(`docker compose -p ${name} -f ${filePath} up -d --remove-orphans`, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve(stdout);
+      });
+    });
+
+    logEvent({ type: 'stack:deploy', actor: req.user.username, target: name, detail: 'Stack deployed' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/stacks/:name', authMiddleware, adminOnly, async (req, res) => {
+  const { name } = req.params;
+  const { content } = req.body;
+  if (!content) return res.status(400).json({ error: 'Content required' });
+
+  try {
+    ensureDir();
+    const filePath = path.join(STACKS_DIR, `${name}.yml`);
+    fs.writeFileSync(filePath, content, 'utf8');
+
+    await new Promise((resolve, reject) => {
+      exec(`docker compose -p ${name} -f ${filePath} up -d --remove-orphans`, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve(stdout);
+      });
+    });
+
+    logEvent({ type: 'stack:update', actor: req.user.username, target: name, detail: 'Stack updated' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/stacks/:name', authMiddleware, adminOnly, async (req, res) => {
+  const { name } = req.params;
+  try {
+    const filePath = path.join(STACKS_DIR, `${name}.yml`);
+
+    if (fs.existsSync(filePath)) {
+      await new Promise((resolve, reject) => {
+        exec(`docker compose -p ${name} -f ${filePath} down`, (err, stdout, stderr) => {
+          if (err) return reject(new Error(stderr || err.message));
+          resolve(stdout);
+        });
+      });
+      fs.unlinkSync(filePath);
+    } else {
+      // No compose file, try to stop containers by label
+      const docker = getDocker();
+      const containers = await docker.listContainers({ all: true });
+      const stackContainers = containers.filter(c => c.Labels['com.docker.compose.project'] === name);
+      for (const c of stackContainers) {
+        const container = docker.getContainer(c.Id);
+        if (c.State === 'running') await container.stop().catch(() => {});
+        await container.remove().catch(() => {});
+      }
+    }
+
+    logEvent({ type: 'stack:delete', actor: req.user.username, target: name, detail: 'Stack deleted' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/stacks/:name/:action', authMiddleware, adminOnly, async (req, res) => {
+  const { name, action } = req.params;
+  if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Action not allowed' });
+
+  try {
+    const filePath = path.join(STACKS_DIR, `${name}.yml`);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Compose file not found' });
+
+    const cmd = action === 'stop'
+      ? `docker compose -p ${name} -f ${filePath} stop`
+      : action === 'start'
+        ? `docker compose -p ${name} -f ${filePath} start`
+        : `docker compose -p ${name} -f ${filePath} restart`;
+
+    await new Promise((resolve, reject) => {
+      exec(cmd, (err, stdout, stderr) => {
+        if (err) return reject(new Error(stderr || err.message));
+        resolve(stdout);
+      });
+    });
+
+    logEvent({ type: `stack:${action}`, actor: req.user.username, target: name });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Info ──────────────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.2.0' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
@@ -211,49 +420,49 @@ app.get('/api/info', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Users ────────────────────────────────────────────────────────────────────
+// ── Users ─────────────────────────────────────────────────────────────────────
 app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
   res.json(users.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
 });
 
 app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
   const { username, password, role } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
-  if (!['admin','viewer'].includes(role)) return res.status(400).json({ error: 'Rol inválido' });
-  if (users.find(u => u.username === username)) return res.status(400).json({ error: 'El usuario ya existe' });
-  if (password.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+  if (!['admin','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (users.find(u => u.username === username)) return res.status(400).json({ error: 'User already exists' });
+  if (password.length < 6) return res.status(400).json({ error: 'Minimum 6 characters' });
   const newUser = { id: Date.now(), username, passwordHash: bcrypt.hashSync(password, 10), role, createdAt: new Date().toISOString() };
   users.push(newUser);
   saveUsers(users);
-  logEvent({ type: 'user:created', actor: req.user.username, target: username, detail: `Rol: ${role}` });
+  logEvent({ type: 'user:created', actor: req.user.username, target: username, detail: `Role: ${role}` });
   res.json({ id: newUser.id, username: newUser.username, role: newUser.role, createdAt: newUser.createdAt });
 });
 
 app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
   const user = users.find(u => u.id === Number(req.params.id));
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  if (!user) return res.status(404).json({ error: 'User not found' });
   const { role, password } = req.body;
   if (role && ['admin','viewer'].includes(role)) user.role = role;
   if (password) {
-    if (password.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+    if (password.length < 6) return res.status(400).json({ error: 'Minimum 6 characters' });
     user.passwordHash = bcrypt.hashSync(password, 10);
   }
   saveUsers(users);
-  logEvent({ type: 'user:updated', actor: req.user.username, target: user.username, detail: role ? `Rol cambiado a ${role}` : 'Contraseña actualizada' });
+  logEvent({ type: 'user:updated', actor: req.user.username, target: user.username, detail: role ? `Role changed to ${role}` : 'Password updated' });
   res.json({ id: user.id, username: user.username, role: user.role });
 });
 
 app.delete('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
   const idx = users.findIndex(u => u.id === Number(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Usuario no encontrado' });
-  if (users[idx].id === req.user.id) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+  if (idx === -1) return res.status(404).json({ error: 'User not found' });
+  if (users[idx].id === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
   const deleted = users.splice(idx, 1)[0];
   saveUsers(users);
   logEvent({ type: 'user:deleted', actor: req.user.username, target: deleted.username });
   res.json({ ok: true });
 });
 
-// ── Settings ─────────────────────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────────────────────
 app.get('/api/settings', authMiddleware, (req, res) => res.json(loadSettings()));
 
 app.put('/api/settings', authMiddleware, adminOnly, (req, res) => {
@@ -261,7 +470,7 @@ app.put('/api/settings', authMiddleware, adminOnly, (req, res) => {
   const updated = { ...current, ...req.body };
   if (req.body.telegram?.token === '••••••••') updated.telegram.token = current.telegram?.token || '';
   saveSettings(updated);
-  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Ajustes actualizados' });
+  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Settings updated' });
   res.json(updated);
 });
 
@@ -269,29 +478,29 @@ app.post('/api/settings/change-password', authMiddleware, (req, res) => {
   const { currentPassword, newPassword } = req.body;
   const user = users.find(u => u.id === req.user.id);
   if (!user || !bcrypt.compareSync(currentPassword, user.passwordHash))
-    return res.status(401).json({ error: 'Contraseña actual incorrecta' });
-  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Mínimo 6 caracteres' });
+    return res.status(401).json({ error: 'Wrong current password' });
+  if (!newPassword || newPassword.length < 6) return res.status(400).json({ error: 'Minimum 6 characters' });
   user.passwordHash = bcrypt.hashSync(newPassword, 10);
   saveUsers(users);
-  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Contraseña cambiada' });
+  logEvent({ type: 'settings:changed', actor: req.user.username, detail: 'Password changed' });
   res.json({ ok: true });
 });
 
 app.post('/api/settings/test-telegram', authMiddleware, adminOnly, async (req, res) => {
   const { token, chatId } = req.body;
-  if (!token || !chatId) return res.status(400).json({ error: 'Token y Chat ID requeridos' });
+  if (!token || !chatId) return res.status(400).json({ error: 'Token and Chat ID required' });
   try {
     const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: '✅ NEXUS conectado correctamente a Telegram!' })
+      body: JSON.stringify({ chat_id: chatId, text: '✅ NEXUS connected to Telegram!' })
     });
     const data = await response.json();
     if (data.ok) res.json({ ok: true });
-    else res.status(400).json({ error: data.description || 'Error de Telegram' });
+    else res.status(400).json({ error: data.description || 'Telegram error' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Events ───────────────────────────────────────────────────────────────────
+// ── Events ────────────────────────────────────────────────────────────────────
 app.get('/api/events', authMiddleware, (req, res) => {
   const { type, limit = 100, offset = 0 } = req.query;
   let filtered = type ? events.filter(e => e.type.startsWith(type)) : events;
@@ -303,7 +512,7 @@ app.delete('/api/events', authMiddleware, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Alert system ─────────────────────────────────────────────────────────────
+// ── Alerts ────────────────────────────────────────────────────────────────────
 const containerStates = new Map();
 const alerts = [];
 let alertSeq = 0;
@@ -327,7 +536,7 @@ async function pollContainerAlerts() {
           alerts.unshift(alert);
           if (alerts.length > 100) alerts.pop();
           io.emit('alert:new', alert);
-          logEvent({ type: 'container:crash', actor: 'system', target: name, detail: `Caída inesperada → ${state}` });
+          logEvent({ type: 'container:crash', actor: 'system', target: name, detail: `Unexpected crash → ${state}` });
         }
         if (state === 'running') prev.manualStop = false;
         prev.state = state;
@@ -347,7 +556,7 @@ app.get('/api/alerts', authMiddleware, (req, res) => res.json(alerts));
 app.post('/api/alerts/read-all', authMiddleware, (req, res) => { alerts.forEach(a => a.read = true); res.json({ ok: true }); });
 app.delete('/api/alerts', authMiddleware, adminOnly, (req, res) => { alerts.length = 0; res.json({ ok: true }); });
 
-// ── Socket ───────────────────────────────────────────────────────────────────
+// ── Socket ────────────────────────────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('No token'));
