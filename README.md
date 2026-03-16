@@ -7,7 +7,8 @@
 **A lightweight, beautiful Docker management panel — built as an alternative to Portainer.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://www.docker.com/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://hub.docker.com/r/afraguas1983/nexus)
+[![Docker Pulls](https://img.shields.io/docker/pulls/afraguas1983/nexus)](https://hub.docker.com/r/afraguas1983/nexus)
 [![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
 
@@ -80,7 +81,7 @@ docker compose pull && docker compose up -d
 ```yaml
 services:
   nexus:
-    image: ghcr.io/alvarito1983/nexus:latest
+    image: afraguas1983/nexus:latest
     container_name: nexus
     restart: unless-stopped
     ports:

@@ -1,6 +1,6 @@
 services:
   nexus:
-    image: ghcr.io/alvarito1983/nexus:latest
+    image: afraguas1983/nexus:latest
     container_name: nexus
     restart: unless-stopped
     ports:
