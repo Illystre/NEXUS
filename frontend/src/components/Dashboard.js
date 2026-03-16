@@ -138,11 +138,16 @@ export default function Dashboard() {
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoMark}>
-              <svg width="18" height="18" viewBox="0 0 28 28" fill="none">
-                <rect x="2" y="2" width="11" height="11" rx="2" fill="var(--brand)"/>
-                <rect x="15" y="2" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.5"/>
-                <rect x="2" y="15" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.5"/>
-                <rect x="15" y="15" width="11" height="11" rx="2" fill="var(--brand)" opacity="0.25"/>
+              <svg width="18" height="18" viewBox="0 0 200 200" fill="none">
+                <rect x="28" y="28" width="62" height="62" rx="10" fill="#00c896"/>
+                <rect x="110" y="28" width="62" height="62" rx="10" fill="#00c896" opacity="0.55"/>
+                <rect x="28" y="110" width="62" height="62" rx="10" fill="#00c896" opacity="0.3"/>
+                <rect x="110" y="110" width="62" height="62" rx="10" fill="none" stroke="#00c896" strokeWidth="6"/>
+                <path d="M125 125 L125 157 L133 157 L133 136 L149 157 L157 157 L157 125 L149 125 L149 146 L133 125 Z" fill="#00c896"/>
+                <line x1="90" y1="57" x2="110" y2="57" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+                <line x1="57" y1="90" x2="57" y2="110" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+                <line x1="90" y1="141" x2="110" y2="141" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+                <line x1="141" y1="90" x2="141" y2="110" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
               </svg>
             </div>
             <span style={s.logoText}>NEXUS</span>
@@ -284,7 +289,7 @@ const s = {
   sidebar:{width:'220px',flexShrink:0,background:'var(--bg-surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',justifyContent:'space-between',height:'100vh'},
   sidebarTop:{padding:'20px 16px',flex:1,overflowY:'auto'},
   logo:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',padding:'0 4px'},
-  logoMark:{width:'32px',height:'32px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
+  logoMark:{width:'32px',height:'32px',background:'#00c89620',border:'1px solid #00c89640',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
   logoText:{fontWeight:700,fontSize:'1em',letterSpacing:'0.15em'},
   hostSelectorWrap:{marginBottom:'16px'},
   hostSelectorLabel:{fontSize:'0.68em',fontWeight:600,letterSpacing:'0.12em',color:'var(--text-muted)',padding:'0 4px 6px'},

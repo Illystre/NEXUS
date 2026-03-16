@@ -32,11 +32,16 @@ export default function Login() {
         <div style={s.brandArea}>
           <div style={s.logo}>
             <div style={s.logoMark}>
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <rect x="2" y="2" width="11" height="11" rx="2" fill="#4f78ff"/>
-                <rect x="15" y="2" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-                <rect x="2" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-                <rect x="15" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.3"/>
+              <svg width="28" height="28" viewBox="0 0 200 200" fill="none">
+                <rect x="28" y="28" width="62" height="62" rx="10" fill="#00c896"/>
+                <rect x="110" y="28" width="62" height="62" rx="10" fill="#00c896" opacity="0.55"/>
+                <rect x="28" y="110" width="62" height="62" rx="10" fill="#00c896" opacity="0.3"/>
+                <rect x="110" y="110" width="62" height="62" rx="10" fill="none" stroke="#00c896" stroke-width="6"/>
+                <path d="M125 125 L125 157 L133 157 L133 136 L149 157 L157 157 L157 125 L149 125 L149 146 L133 125 Z" fill="#00c896"/>
+                <line x1="90" y1="57" x2="110" y2="57" stroke="#00c896" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
+                <line x1="57" y1="90" x2="57" y2="110" stroke="#00c896" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
+                <line x1="90" y1="141" x2="110" y2="141" stroke="#00c896" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
+                <line x1="141" y1="90" x2="141" y2="110" stroke="#00c896" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
               </svg>
             </div>
             <div>
@@ -63,11 +68,12 @@ export default function Login() {
       <div className="login-right" style={s.rightPanel}>
         <div style={s.mobileLogoWrap}>
           <div style={s.mobileLogo}>
-            <svg width="22" height="22" viewBox="0 0 28 28" fill="none">
-              <rect x="2" y="2" width="11" height="11" rx="2" fill="#4f78ff"/>
-              <rect x="15" y="2" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-              <rect x="2" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.5"/>
-              <rect x="15" y="15" width="11" height="11" rx="2" fill="#4f78ff" opacity="0.3"/>
+            <svg width="22" height="22" viewBox="0 0 200 200" fill="none">
+              <rect x="28" y="28" width="62" height="62" rx="10" fill="#00c896"/>
+              <rect x="110" y="28" width="62" height="62" rx="10" fill="#00c896" opacity="0.55"/>
+              <rect x="28" y="110" width="62" height="62" rx="10" fill="#00c896" opacity="0.3"/>
+              <rect x="110" y="110" width="62" height="62" rx="10" fill="none" stroke="#00c896" stroke-width="6"/>
+              <path d="M125 125 L125 157 L133 157 L133 136 L149 157 L157 157 L157 125 L149 125 L149 146 L133 125 Z" fill="#00c896"/>
             </svg>
             <span style={s.mobileLogoText}>NEXUS</span>
           </div>
@@ -117,17 +123,17 @@ export default function Login() {
 const s = {
   page: { display:'flex', height:'100vh', overflow:'hidden' },
   leftPanel: { width:'480px', flexShrink:0, background:'var(--bg-surface)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', justifyContent:'space-between', position:'relative', overflow:'hidden', padding:'48px' },
-  leftBg: { position:'absolute', inset:0, pointerEvents:'none', background:'radial-gradient(ellipse at 20% 80%, #4f78ff15 0%, transparent 60%)' },
+  leftBg: { position:'absolute', inset:0, pointerEvents:'none', background:'radial-gradient(ellipse at 20% 80%, #00c89615 0%, transparent 60%)' },
   brandArea: { position:'relative', zIndex:1, display:'flex', flexDirection:'column', gap:'48px' },
   logo: { display:'flex', alignItems:'center', gap:'14px' },
-  logoMark: { width:'44px', height:'44px', background:'var(--brand-glow)', border:'1px solid var(--border-focus)', borderRadius:'10px', display:'flex', alignItems:'center', justifyContent:'center' },
+  logoMark: { width:'44px', height:'44px', background:'#00c89620', border:'1px solid #00c89640', borderRadius:'10px', display:'flex', alignItems:'center', justifyContent:'center' },
   logoName: { fontSize:'1.3em', fontWeight:700, letterSpacing:'0.12em' },
   logoTagline: { fontSize:'0.72em', color:'var(--text-muted)', letterSpacing:'0.08em', marginTop:'1px' },
   heroH1: { fontSize:'2.4em', fontWeight:700, lineHeight:1.15, marginBottom:'16px', letterSpacing:'-0.02em' },
   heroP: { color:'var(--text-secondary)', lineHeight:1.7, fontSize:'0.95em', maxWidth:'320px' },
   stats: { display:'flex', gap:'32px' },
   statItem: {},
-  statVal: { fontWeight:700, fontSize:'0.95em', color:'var(--brand-light)', marginBottom:'2px' },
+  statVal: { fontWeight:700, fontSize:'0.95em', color:'#00c896', marginBottom:'2px' },
   statLbl: { fontSize:'0.72em', color:'var(--text-muted)', letterSpacing:'0.04em' },
   rightPanel: { flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', background:'var(--bg)', position:'relative' },
   mobileLogoWrap: { display:'none' },
@@ -144,7 +150,7 @@ const s = {
   label: { display:'block', fontSize:'0.8em', fontWeight:500, color:'var(--text-secondary)', marginBottom:'6px' },
   input: { width:'100%', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'11px 14px', color:'var(--text-primary)', fontFamily:'var(--font-sans)', fontSize:'1em', outline:'none' },
   errorBox: { display:'flex', alignItems:'center', gap:'8px', background:'var(--danger-bg)', border:'1px solid var(--danger-border)', borderRadius:'var(--radius)', padding:'10px 14px', color:'var(--danger)', fontSize:'0.85em', marginBottom:'18px' },
-  btn: { width:'100%', padding:'12px', background:'var(--brand)', border:'none', borderRadius:'var(--radius)', color:'white', fontFamily:'var(--font-sans)', fontSize:'1em', fontWeight:600, cursor:'pointer' },
+  btn: { width:'100%', padding:'12px', background:'#00c896', border:'none', borderRadius:'var(--radius)', color:'white', fontFamily:'var(--font-sans)', fontSize:'1em', fontWeight:600, cursor:'pointer' },
   btnInner: { display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' },
   spinner: { width:'14px', height:'14px', border:'2px solid rgba(255,255,255,0.3)', borderTop:'2px solid white', borderRadius:'50%', animation:'spin 0.7s linear infinite' },
   footer: { marginTop:'24px', textAlign:'center' },
