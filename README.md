@@ -30,6 +30,7 @@
 - **🎨 Themeable** — dark/light mode + custom accent color
 - **📱 PWA + Mobile** — installable as desktop/mobile app, fully responsive
 - **🔒 JWT auth** — secure token-based authentication
+- **🖼 Image management** — list, inspect, pull from Docker Hub and remove local images
 
 ---
 
@@ -141,11 +142,11 @@ docker compose up --build -d
 - [x] Edit and delete existing stacks
 - [x] Docker Compose editor with syntax highlighting
 
-### v1.4.0 — Image Management
-- [ ] List local images
-- [ ] Search and pull images from Docker Hub
-- [ ] Remove images
-- [ ] View image layers and details
+### v1.4.0 ✅ — Image Management
+- [x] List local images
+- [x] Search and pull images from Docker Hub
+- [x] Remove images
+- [x] View image layers and details
 
 ### v1.5.0 — Network & Volumes
 - [ ] Docker network management (create, delete, inspect)
