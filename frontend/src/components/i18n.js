@@ -6,6 +6,7 @@ const translations = {
       cards: 'Cards',
       metrics: 'Metrics',
       events: 'Events',
+      images: 'Images',
       settings: 'Settings',
       deploy: 'Deploy',
       views: 'VIEWS',
@@ -140,9 +141,9 @@ const translations = {
   es: {
     nav: {
       stacks: 'Stacks', table: 'Tabla compacta', cards: 'Tarjetas',
-      metrics: 'Métricas', events: 'Eventos', settings: 'Ajustes',
-      deploy: 'Desplegar', views: 'VISTAS', manage: 'GESTIONAR',
-      account: 'CUENTA', server: 'SERVIDOR',
+      metrics: 'Métricas', events: 'Eventos', images: 'Imágenes',
+      settings: 'Ajustes', deploy: 'Desplegar', views: 'VISTAS',
+      manage: 'GESTIONAR', account: 'CUENTA', server: 'SERVIDOR',
     },
     dashboard: {
       running: 'running', stopped: 'stopped', stacks: 'stacks',

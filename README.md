@@ -37,13 +37,25 @@
 
 ## 📸 Screenshots
 
-| Stacks view | Metrics with sparklines |
+| Login | Stack view |
 |---|---|
-| ![Stacks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Stack.png) | ![Metrics](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Metric.png) |
+| ![Login](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Login.png) | ![Stacks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Stack.png) |
 
-| Terminal | Settings |
+| Metrics with sparklines | Compact table |
 |---|---|
-| ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Settings](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Settings.png) |
+| ![Metrics](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Metric.png) | ![Compact table](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Compact_table.png) |
+
+| Terminal | Cards view |
+|---|---|
+| ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Cards](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Cards.png) |
+
+| Image management | Deploy |
+|---|---|
+| ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
+
+| Events | Settings |
+|---|---|
+| ![Events](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Events.png) | ![Settings](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Settings.png) |
 
 ---
 
