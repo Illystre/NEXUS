@@ -189,6 +189,11 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
 });
 
 app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    res.json(await docker.getContainer(req.params.id).inspect());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.delete('/api/containers/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
@@ -200,11 +205,6 @@ app.delete('/api/containers/:id', authMiddleware, adminOnly, async (req, res) =>
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
-  try {
-    const docker = getDocker(req.query.host);
-    res.json(await docker.getContainer(req.params.id).inspect());
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 // ── Container Create ──────────────────────────────────────────────────────────
 app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) => {
@@ -214,7 +214,6 @@ app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) =
   try {
     const docker = getDocker(req.query.host);
 
-    // Pull image first
     await new Promise((resolve, reject) => {
       docker.pull(image, (err, stream) => {
         if (err) return reject(err);
@@ -222,7 +221,6 @@ app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) =
       });
     });
 
-    // Build port bindings
     const ExposedPorts = {};
     const PortBindings = {};
     (ports || []).forEach(p => {
@@ -233,12 +231,10 @@ app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) =
       }
     });
 
-    // Build volume bindings
     const Binds = (volumes || [])
       .filter(v => v.host && v.container)
       .map(v => `${v.host}:${v.container}${v.readonly ? ':ro' : ''}`);
 
-    // Build env
     const Env = (envVars || [])
       .filter(e => e.key)
       .map(e => `${e.key}=${e.value || ''}`);
@@ -271,7 +267,6 @@ app.get('/api/stacks', authMiddleware, async (req, res) => {
     const docker = getDocker(req.query.host);
     const containers = await docker.listContainers({ all: true });
 
-    // Group by compose project
     const stackMap = {};
     containers.forEach(c => {
       const project = c.Labels['com.docker.compose.project'];
@@ -287,7 +282,6 @@ app.get('/api/stacks', authMiddleware, async (req, res) => {
       if (c.State === 'running') stackMap[project].running++;
     });
 
-    // Check for saved compose files
     ensureDir();
     const saved = fs.existsSync(STACKS_DIR)
       ? fs.readdirSync(STACKS_DIR).filter(f => f.endsWith('.yml')).map(f => f.replace('.yml', ''))
@@ -321,7 +315,6 @@ app.post('/api/stacks/deploy', authMiddleware, adminOnly, async (req, res) => {
     const filePath = path.join(STACKS_DIR, `${name}.yml`);
     fs.writeFileSync(filePath, content, 'utf8');
 
-    // Run docker compose up
     await new Promise((resolve, reject) => {
       exec(`docker compose -p ${name} -f ${filePath} up -d --remove-orphans`, (err, stdout, stderr) => {
         if (err) return reject(new Error(stderr || err.message));
@@ -374,7 +367,6 @@ app.delete('/api/stacks/:name', authMiddleware, adminOnly, async (req, res) => {
       });
       fs.unlinkSync(filePath);
     } else {
-      // No compose file, try to stop containers by label
       const docker = getDocker();
       const containers = await docker.listContainers({ all: true });
       const stackContainers = containers.filter(c => c.Labels['com.docker.compose.project'] === name);
@@ -420,8 +412,72 @@ app.post('/api/stacks/:name/:action', authMiddleware, adminOnly, async (req, res
   }
 });
 
+// ── Images ────────────────────────────────────────────────────────────────────
+app.get('/api/images', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const images = await docker.listImages({ all: false });
+    res.json(images.map(img => ({
+      id: img.Id,
+      shortId: img.Id.replace('sha256:', '').substring(0, 12),
+      tags: img.RepoTags || [],
+      size: img.Size,
+      created: img.Created,
+      containers: img.Containers,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/images/:id/inspect', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    res.json(await docker.getImage(req.params.id).inspect());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/images/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    await docker.getImage(req.params.id).remove({ force: req.query.force === 'true' });
+    logEvent({ type: 'image:delete', actor: req.user.username, target: req.params.id.substring(0, 12), detail: 'Image removed' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/images/pull', authMiddleware, adminOnly, async (req, res) => {
+  const { image } = req.body;
+  if (!image) return res.status(400).json({ error: 'Image name required' });
+  try {
+    const docker = getDocker(req.query.host);
+    await new Promise((resolve, reject) => {
+      docker.pull(image, (err, stream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (err) => err ? reject(err) : resolve());
+      });
+    });
+    logEvent({ type: 'image:pull', actor: req.user.username, target: image, detail: 'Image pulled from registry' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/images/search', authMiddleware, async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'Query required' });
+  try {
+    const response = await fetch(`https://hub.docker.com/v2/search/repositories/?query=${encodeURIComponent(q)}&page_size=10`);
+    const data = await response.json();
+    res.json(data.results.map(r => ({
+      name: r.repo_name,
+      description: r.short_description,
+      stars: r.star_count,
+      official: r.is_official,
+      pulls: r.pull_count,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Info ──────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.2.0' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.4.0' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
