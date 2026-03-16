@@ -40,7 +40,7 @@ function Toast({ msg, type }) {
   if (!msg) return null;
   return (
     <div style={{...s.toast, borderColor: type==='success'?'var(--success)':'var(--danger)', color: type==='success'?'var(--success)':'var(--danger)'}}>
-      {type==='success'?'✓':'⚠'} {msg}
+      {type==='success'?'✔':'⚠'} {msg}
     </div>
   );
 }
@@ -112,15 +112,15 @@ function UsersPanel({ showToast }) {
                       <option value="viewer">Viewer</option>
                     </select>
                     <input style={{...s.input, width:'130px'}} type="password" placeholder={l.newPassword} value={editPass} onChange={e => setEditPass(e.target.value)} />
-                    <button style={s.saveSmallBtn} onClick={() => update(u.id)}>✓</button>
+                    <button style={s.saveSmallBtn} onClick={() => update(u.id)}>✔</button>
                     <button style={s.cancelBtn} onClick={() => { setEditId(null); setEditRole(''); setEditPass(''); }}>✕</button>
                   </div>
                 ) : (
                   <div style={s.userActions}>
                     <span style={{...s.roleBadge, color: u.role==='admin'?'var(--brand-light)':'var(--text-muted)', background: u.role==='admin'?'var(--brand-glow)':'var(--bg-elevated)', border:`1px solid ${u.role==='admin'?'var(--border-focus)':'var(--border)'}`}}>{u.role}</span>
-                    <button style={s.editBtn} onClick={() => { setEditId(u.id); setEditRole(u.role); }}>✏</button>
+                    <button style={s.editBtn} onClick={() => { setEditId(u.id); setEditRole(u.role); }}>✎</button>
                     {u.username !== currentUser && (
-                      <button style={s.deleteBtn} onClick={() => remove(u.id, u.username)}>🗑</button>
+                      <button style={s.deleteBtn} onClick={() => remove(u.id, u.username)}>🗒</button>
                     )}
                   </div>
                 )}
@@ -155,8 +155,8 @@ function UsersPanel({ showToast }) {
           {l.perms.map(([perm, admin, viewer]) => (
             <div key={perm} style={s.permRow}>
               <span style={s.permName}>{perm}</span>
-              <span style={{...s.permCheck, color: admin?'var(--success)':'var(--danger)'}}>{admin?'✓':'✕'}</span>
-              <span style={{...s.permCheck, color: viewer?'var(--success)':'var(--danger)'}}>{viewer?'✓':'✕'}</span>
+              <span style={{...s.permCheck, color: admin?'var(--success)':'var(--danger)'}}>{admin?'✔':'✕'}</span>
+              <span style={{...s.permCheck, color: viewer?'var(--success)':'var(--danger)'}}>{viewer?'✔':'✕'}</span>
             </div>
           ))}
           <div style={{...s.permRow, background:'var(--bg)', fontWeight:600}}>
@@ -221,7 +221,7 @@ function HostsPanel({ showToast, onHostsChange }) {
     setTestResults(p => ({ ...p, [id]: null }));
     try {
       const r = await axios.post(`/api/hosts/${id}/test`);
-      setTestResults(p => ({ ...p, [id]: { ok: true, msg: `✓ Docker ${r.data.version} · ${r.data.containers} containers` } }));
+      setTestResults(p => ({ ...p, [id]: { ok: true, msg: `✔ Docker ${r.data.version} · ${r.data.containers} containers` } }));
     } catch (e) {
       setTestResults(p => ({ ...p, [id]: { ok: false, msg: e.response?.data?.error || 'No connection' } }));
     }
@@ -244,7 +244,7 @@ function HostsPanel({ showToast, onHostsChange }) {
                   <div style={s.editRow}>
                     <input style={{...s.input, width:'120px'}} value={editForm.name} onChange={e => setEditForm(p=>({...p,name:e.target.value}))} placeholder="Name" />
                     <input style={{...s.input, width:'200px', fontFamily:'var(--font-mono)', fontSize:'0.8em'}} value={editForm.url} onChange={e => setEditForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
-                    <button style={s.saveSmallBtn} onClick={() => update(h.id)}>✓</button>
+                    <button style={s.saveSmallBtn} onClick={() => update(h.id)}>✔</button>
                     <button style={s.cancelBtn} onClick={() => setEditId(null)}>✕</button>
                   </div>
                 ) : (
@@ -268,8 +268,8 @@ function HostsPanel({ showToast, onHostsChange }) {
                   >
                     {testingId === h.id ? '...' : l.testBtn}
                   </button>
-                  <button style={s.editBtn} onClick={() => { setEditId(h.id); setEditForm({ name: h.name, url: h.url }); }}>✏</button>
-                  <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗑</button>
+                  <button style={s.editBtn} onClick={() => { setEditId(h.id); setEditForm({ name: h.name, url: h.url }); }}>✎</button>
+                  <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗒</button>
                 </div>
               )}
             </div>
@@ -296,7 +296,8 @@ function HostsPanel({ showToast, onHostsChange }) {
           <div style={{fontSize:'0.82em',color:'var(--text-secondary)',marginBottom:'10px'}}>
             {l.hostConfigText} <code style={s.code}>docker-compose.yml</code>:
           </div>
-          <pre style={s.codeBlock}>{`  dockerproxy:
+          <pre style={s.codeBlock}>{`services:
+  dockerproxy:
     image: tecnativa/docker-socket-proxy:latest
     restart: unless-stopped
     ports:
