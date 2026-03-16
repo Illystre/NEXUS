@@ -1,12 +1,8 @@
-name: Build & Push to GHCR
+name: Build & Push to GHCR and Docker Hub
 
 on:
   push:
     branches: [ "main" ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -26,6 +22,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: afraguas1983
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -34,3 +37,5 @@ jobs:
           tags: |
             ghcr.io/alvarito1983/nexus:latest
             ghcr.io/alvarito1983/nexus:${{ github.sha }}
+            afraguas1983/nexus:latest
+            afraguas1983/nexus:${{ github.sha }}
