@@ -10,6 +10,8 @@ import EventsView from './EventsView';
 import AlertPanel from './AlertPanel';
 import DeployView from './DeployView';
 import ImagesView from './ImagesView';
+import NetworksView from './NetworksView';
+import VolumesView from './VolumesView';
 import { useLang } from './LanguageContext';
 
 function applyTheme(settings) {
@@ -114,12 +116,14 @@ export default function Dashboard() {
     : hosts.find(h => h.id === selectedHost)?.name || selectedHost;
 
   const NAV_MAIN = [
-    { id:'stacks',  icon:'⊞', label: n.stacks },
-    { id:'table',   icon:'≡', label: n.table },
-    { id:'all',     icon:'▦', label: n.cards },
-    { id:'metrics', icon:'◈', label: n.metrics },
-    { id:'events',  icon:'▤', label: n.events },
-    { id:'images',  icon:'◫', label: n.images || 'Images' },
+    { id:'stacks',   icon:'⊞', label: n.stacks },
+    { id:'table',    icon:'≡', label: n.table },
+    { id:'all',      icon:'▦', label: n.cards },
+    { id:'metrics',  icon:'◈', label: n.metrics },
+    { id:'events',   icon:'▤', label: n.events },
+    { id:'images',   icon:'◫', label: n.images || 'Images' },
+    { id:'networks', icon:'⬡', label: n.networks || 'Networks' },
+    { id:'volumes',  icon:'⬢', label: n.volumes || 'Volumes' },
   ];
 
   const NAV_DEPLOY = isAdmin ? [
@@ -225,12 +229,12 @@ export default function Dashboard() {
             {hosts.length > 0 && (
               <span style={s.hostBadge}>{selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}</span>
             )}
-            {lastRefresh && tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && (
+            {lastRefresh && tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && tab !== 'networks' && tab !== 'volumes' && (
               <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString()}</span>
             )}
           </div>
           <div style={s.topbarRight}>
-            {tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && (
+            {tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && tab !== 'networks' && tab !== 'volumes' && (
               <>
                 <div className="metric-pills-desktop" style={s.metricPills}>
                   {[{dot:'var(--success)',num:running,lbl:d.running},{dot:'var(--danger)',num:stopped,lbl:d.stopped},{dot:'var(--brand)',num:stacks,lbl:d.stacks}].map(m => (
@@ -257,16 +261,18 @@ export default function Dashboard() {
         </header>
 
         <div className="nexus-content" style={s.content}>
-          {loading && tab !== 'settings' && tab !== 'deploy' && tab !== 'images' ? <Loader msg={d.loading} /> : (
+          {loading && tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && tab !== 'networks' && tab !== 'volumes' ? <Loader msg={d.loading} /> : (
             <div key={tab + selectedHost} className="fade-up">
-              {tab==='stacks'   && <StackView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='table'    && <TableView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='all'      && <ContainerList containers={containers} onAction={handleAction} isViewer={isViewer} />}
-              {tab==='metrics'  && <MetricsView   containers={containers} hostParam={hostParam} />}
-              {tab==='events'   && <EventsView />}
-              {tab==='deploy'   && <DeployView    onContainersRefresh={fetchAll} />}
-              {tab==='images'   && <ImagesView    hostParam={hostParam} isViewer={isViewer} />}
-              {tab==='settings' && <SettingsView  onSettingsChange={handleSettingsChange} onHostsChange={setHosts} />}
+              {tab==='stacks'    && <StackView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='table'     && <TableView     containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='all'       && <ContainerList containers={containers} onAction={handleAction} isViewer={isViewer} />}
+              {tab==='metrics'   && <MetricsView   containers={containers} hostParam={hostParam} />}
+              {tab==='events'    && <EventsView />}
+              {tab==='deploy'    && <DeployView    onContainersRefresh={fetchAll} />}
+              {tab==='images'    && <ImagesView    hostParam={hostParam} isViewer={isViewer} />}
+              {tab==='networks'  && <NetworksView  hostParam={hostParam} isViewer={isViewer} />}
+              {tab==='volumes'   && <VolumesView   hostParam={hostParam} isViewer={isViewer} />}
+              {tab==='settings'  && <SettingsView  onSettingsChange={handleSettingsChange} onHostsChange={setHosts} />}
             </div>
           )}
         </div>

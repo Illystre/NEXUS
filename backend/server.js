@@ -476,8 +476,117 @@ app.get('/api/images/search', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Networks ──────────────────────────────────────────────────────────────────
+app.get('/api/networks', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const networks = await docker.listNetworks();
+    res.json(networks.map(n => ({
+      id: n.Id,
+      shortId: n.Id.substring(0, 12),
+      name: n.Name,
+      driver: n.Driver,
+      scope: n.Scope,
+      internal: n.Internal,
+      attachable: n.Attachable,
+      created: n.Created,
+      containers: Object.keys(n.Containers || {}).length,
+      subnet: n.IPAM?.Config?.[0]?.Subnet || null,
+      gateway: n.IPAM?.Config?.[0]?.Gateway || null,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/networks/:id/inspect', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    res.json(await docker.getNetwork(req.params.id).inspect());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/networks', authMiddleware, adminOnly, async (req, res) => {
+  const { name, driver, internal, subnet, gateway } = req.body;
+  if (!name) return res.status(400).json({ error: 'Network name is required' });
+  try {
+    const docker = getDocker(req.query.host);
+    const ipamConfig = [];
+    if (subnet) {
+      const cfg = { Subnet: subnet };
+      if (gateway) cfg.Gateway = gateway;
+      ipamConfig.push(cfg);
+    }
+    const network = await docker.createNetwork({
+      Name: name,
+      Driver: driver || 'bridge',
+      Internal: internal || false,
+      IPAM: ipamConfig.length ? { Config: ipamConfig } : undefined,
+    });
+    logEvent({ type: 'network:create', actor: req.user.username, target: name, detail: `Driver: ${driver || 'bridge'}` });
+    res.json({ ok: true, id: network.id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/networks/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const network = docker.getNetwork(req.params.id);
+    const info = await network.inspect();
+    await network.remove();
+    logEvent({ type: 'network:delete', actor: req.user.username, target: info.Name, detail: 'Network removed' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Volumes ───────────────────────────────────────────────────────────────────
+app.get('/api/volumes', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    const data = await docker.listVolumes();
+    const volumes = data.Volumes || [];
+    res.json(volumes.map(v => ({
+      name: v.Name,
+      driver: v.Driver,
+      mountpoint: v.Mountpoint,
+      scope: v.Scope,
+      created: v.CreatedAt,
+      labels: v.Labels || {},
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/volumes/:name/inspect', authMiddleware, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    res.json(await docker.getVolume(req.params.name).inspect());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/volumes', authMiddleware, adminOnly, async (req, res) => {
+  const { name, driver, labels } = req.body;
+  if (!name) return res.status(400).json({ error: 'Volume name is required' });
+  try {
+    const docker = getDocker(req.query.host);
+    const volume = await docker.createVolume({
+      Name: name,
+      Driver: driver || 'local',
+      Labels: labels || {},
+    });
+    logEvent({ type: 'volume:create', actor: req.user.username, target: name, detail: `Driver: ${driver || 'local'}` });
+    res.json({ ok: true, name: volume.name });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/volumes/:name', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const docker = getDocker(req.query.host);
+    await docker.getVolume(req.params.name).remove({ force: req.query.force === 'true' });
+    logEvent({ type: 'volume:delete', actor: req.user.username, target: req.params.name, detail: 'Volume removed' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Info ──────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.4.0' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.0' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {

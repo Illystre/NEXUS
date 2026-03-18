@@ -35,6 +35,8 @@
 - **📱 PWA + Mobile** — installable as desktop/mobile app, fully responsive
 - **🔒 JWT auth** — secure token-based authentication
 - **🖼 Image management** — list, inspect, pull from Docker Hub and remove local images
+- **🌐 Network management** — list, create, delete and inspect Docker networks
+- **💾 Volume management** — list, create, delete and inspect Docker volumes
 
 ---
 
@@ -53,6 +55,12 @@
 | ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Cards](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Cards.png) |
 
 | Image management | Deploy |
+|---|
+| ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
+
+| Networks | Volumes |
+|---|---|
+| ![Networks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Networks.png) | ![Volumes](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Volumes.png) |
 |---|---|
 | ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
 
@@ -164,10 +172,10 @@ docker compose up --build -d
 - [x] Remove images
 - [x] View image layers and details
 
-### v1.5.0 — Network & Volumes
-- [ ] Docker network management (create, delete, inspect)
-- [ ] Volume management (create, delete, inspect)
-- [ ] Assign networks and volumes when creating containers
+### v1.5.0 ✅ — Network & Volume Management
+- [x] Docker network management (create, delete, inspect)
+- [x] Volume management (create, delete, inspect)
+- [x] Assign networks and volumes when creating containers
 
 ### v1.6.0 — Enterprise Features
 - [ ] SSO / LDAP integration
