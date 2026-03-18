@@ -1,15 +1,18 @@
 # ── Stage 1: Build frontend ───────────────────────────────────────────────────
-FROM node:16-alpine AS build-frontend
+FROM node:20-alpine AS build-frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install --legacy-peer-deps && \
-    npm install ajv@^8.12.0 --legacy-peer-deps
+RUN apk update && apk upgrade --no-cache && \
+    npm install --legacy-peer-deps && \
+    npm install ajv@^8.12.0 --legacy-peer-deps && \
+    npm audit fix --legacy-peer-deps || true
 COPY frontend/ .
 RUN npm run build
 
 # ── Stage 2: Backend + compiled frontend ─────────────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+RUN apk update && apk upgrade --no-cache
 COPY backend/package*.json ./
 RUN npm install --production
 COPY backend/ .
