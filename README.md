@@ -55,14 +55,12 @@
 | ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Cards](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Cards.png) |
 
 | Image management | Deploy |
-|---|
+|---|---|
 | ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
 
 | Networks | Volumes |
 |---|---|
 | ![Networks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Networks.png) | ![Volumes](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Volumes.png) |
-|---|---|
-| ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
 
 | Events | Settings |
 |---|---|
