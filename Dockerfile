@@ -3,9 +3,7 @@ FROM node:20-alpine AS build-frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN apk update && apk upgrade --no-cache && \
-    npm install --legacy-peer-deps && \
-    npm install ajv@^8.12.0 --legacy-peer-deps && \
-    npm audit fix --legacy-peer-deps || true
+    npm install
 COPY frontend/ .
 RUN npm run build
 
