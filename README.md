@@ -9,7 +9,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://hub.docker.com/r/afraguas1983/nexus)
 [![Docker Pulls](https://img.shields.io/docker/pulls/afraguas1983/nexus)](https://hub.docker.com/r/afraguas1983/nexus)
-[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-24-339933?logo=node.js)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://reactjs.org/)
 [![Website](https://img.shields.io/badge/Website-nexus-00c896?style=flat)](https://alvarito1983.github.io/nexus-web/)
 
