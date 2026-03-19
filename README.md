@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/Nexus.png" width="120" height="120" alt="NEXUS logo" />
+<img src="https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/Nexus.png" width="120" height="120" alt="NEXUS logo" />
 
 # NEXUS
 
@@ -117,19 +117,19 @@ NEXUS OS              — Unified dashboard, SSO, service registry
 
 | Login | Dashboard |
 |-------|-----------|
-| ![Login](docs/screenshots/Login.png) | ![Stack](docs/screenshots/Stack.png) |
+| ![Login](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Login.png) | ![Stack](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Stack.png) |
 
 | Metrics | Images |
 |---------|--------|
-| ![Metrics](docs/screenshots/Metric.png) | ![Images](docs/screenshots/Images.png) |
+| ![Metrics](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Metric.png) | ![Images](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Images.png) |
 
 | Networks | Volumes |
 |----------|---------|
-| ![Networks](docs/screenshots/Networks.png) | ![Volumes](docs/screenshots/Volumes.png) |
+| ![Networks](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Networks.png) | ![Volumes](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Volumes.png) |
 
 | Terminal | Deploy |
 |----------|--------|
-| ![Terminal](docs/screenshots/Terminal.png) | ![Deploy](docs/screenshots/Deploy.png) |
+| ![Terminal](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Terminal.png) | ![Deploy](https://raw.githubusercontent.com/Alvarito1983/NEXUS/main/docs/screenshots/Deploy.png) |
 
 ---
 
@@ -139,6 +139,12 @@ NEXUS OS              — Unified dashboard, SSO, service registry
 - **Frontend** — React 18, Vite
 - **Base image** — `node:24-alpine`
 - **Auth** — JWT, multi-user with Admin/Viewer roles
+
+---
+
+## License
+
+MIT © [Alvarito1983](https://github.com/Alvarito1983)
 
 ---
 
