@@ -1,5 +1,5 @@
 # ── Stage 1: Build frontend ───────────────────────────────────────────────────
-FROM node:20-alpine AS build-frontend
+FROM node:24-alpine AS build-frontend
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN apk update && apk upgrade --no-cache && \
@@ -8,7 +8,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ── Stage 2: Backend + compiled frontend ─────────────────────────────────────
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 RUN apk update && apk upgrade --no-cache
 COPY backend/package*.json ./
