@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="public/icon-192.svg" width="120" height="120" alt="NEXUS logo" />
+<img src="docs/Nexus.png" width="120" height="120" alt="NEXUS logo" />
 
 # NEXUS
 
@@ -110,6 +110,26 @@ NEXUS OS              — Unified dashboard, SSO, service registry
 - Free / Pro / Business plans
 - Managed updates and SLA guarantee
 - Usage-based billing
+
+---
+
+## 📸 Screenshots
+
+| Login | Dashboard |
+|-------|-----------|
+| ![Login](docs/screenshots/Login.png) | ![Stack](docs/screenshots/Stack.png) |
+
+| Metrics | Images |
+|---------|--------|
+| ![Metrics](docs/screenshots/Metric.png) | ![Images](docs/screenshots/Images.png) |
+
+| Networks | Volumes |
+|----------|---------|
+| ![Networks](docs/screenshots/Networks.png) | ![Volumes](docs/screenshots/Volumes.png) |
+
+| Terminal | Deploy |
+|----------|--------|
+| ![Terminal](docs/screenshots/Terminal.png) | ![Deploy](docs/screenshots/Deploy.png) |
 
 ---
 
