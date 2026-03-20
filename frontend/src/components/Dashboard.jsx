@@ -141,20 +141,22 @@ export default function Dashboard() {
       <aside className={`nexus-sidebar${sidebarOpen?' open':''}`} style={s.sidebar}>
         <div style={s.sidebarTop}>
           <div style={s.logo}>
-            <div style={s.logoMark}>
-              <svg width="18" height="18" viewBox="0 0 200 200" fill="none">
-                <rect x="28" y="28" width="62" height="62" rx="10" fill="#00c896"/>
-                <rect x="110" y="28" width="62" height="62" rx="10" fill="#00c896" opacity="0.55"/>
-                <rect x="28" y="110" width="62" height="62" rx="10" fill="#00c896" opacity="0.3"/>
-                <rect x="110" y="110" width="62" height="62" rx="10" fill="none" stroke="#00c896" strokeWidth="6"/>
-                <path d="M125 125 L125 157 L133 157 L133 136 L149 157 L157 157 L157 125 L149 125 L149 146 L133 125 Z" fill="#00c896"/>
-                <line x1="90" y1="57" x2="110" y2="57" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
-                <line x1="57" y1="90" x2="57" y2="110" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
-                <line x1="90" y1="141" x2="110" y2="141" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
-                <line x1="141" y1="90" x2="141" y2="110" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
-              </svg>
+            <svg viewBox="0 0 192 192" width="36" height="36" style={{borderRadius:8,flexShrink:0}}>
+              <rect width="192" height="192" rx="40" fill="#0f1f1a"/>
+              <rect x="18" y="18" width="72" height="72" rx="14" fill="#00c896"/>
+              <rect x="102" y="18" width="72" height="72" rx="14" fill="#00c896" opacity="0.55"/>
+              <rect x="18" y="102" width="72" height="72" rx="14" fill="#00c896" opacity="0.3"/>
+              <rect x="102" y="102" width="72" height="72" rx="14" fill="none" stroke="#00c896" strokeWidth="5"/>
+              <path d="M118 118 L118 156 L128 156 L128 134 L150 156 L160 156 L160 118 L150 118 L150 140 L128 118 Z" fill="#00c896"/>
+              <line x1="90" y1="54" x2="102" y2="54" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+              <line x1="54" y1="90" x2="54" y2="102" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+              <line x1="90" y1="138" x2="102" y2="138" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+              <line x1="138" y1="90" x2="138" y2="102" stroke="#00c896" strokeWidth="5" opacity="0.45" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <div style={s.logoText}>NEXUS</div>
+              <div style={s.logoSubtitle}>CONTAINER PLATFORM</div>
             </div>
-            <span style={s.logoText}>NEXUS</span>
           </div>
 
           {hosts.length > 0 && (
@@ -294,9 +296,10 @@ const s = {
   shell:{display:'flex',height:'100vh',overflow:'hidden',position:'relative'},
   sidebar:{width:'220px',flexShrink:0,background:'var(--bg-surface)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',justifyContent:'space-between',height:'100vh'},
   sidebarTop:{padding:'20px 16px',flex:1,overflowY:'auto'},
-  logo:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'16px',padding:'0 4px'},
+  logo:{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px',padding:'0 4px'},
   logoMark:{width:'32px',height:'32px',background:'#00c89620',border:'1px solid #00c89640',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
   logoText:{fontWeight:700,fontSize:'1em',letterSpacing:'0.15em'},
+  logoSubtitle:{fontSize:'0.6em',letterSpacing:'0.12em',color:'var(--text-muted)',marginTop:'1px'},
   hostSelectorWrap:{marginBottom:'16px'},
   hostSelectorLabel:{fontSize:'0.68em',fontWeight:600,letterSpacing:'0.12em',color:'var(--text-muted)',padding:'0 4px 6px'},
   hostSelect:{width:'100%',background:'var(--bg-elevated)',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text-primary)',fontFamily:'var(--font-sans)',fontSize:'0.85em',padding:'7px 10px',cursor:'pointer',outline:'none'},
