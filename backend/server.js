@@ -54,13 +54,40 @@ function saveHosts(hosts) { ensureDir(); fs.writeFileSync(HOSTS_FILE, JSON.strin
 
 let users = loadUsers();
 
+// ── Agent Registry ────────────────────────────────────────────────────────────
+const agentSockets = new Map(); // agentId → socket
+const AGENT_TOKENS_FILE = path.join(DATA_DIR, 'agent_tokens.json');
+
+function loadAgentTokens() {
+  try { if (fs.existsSync(AGENT_TOKENS_FILE)) return JSON.parse(fs.readFileSync(AGENT_TOKENS_FILE, 'utf8')); } catch {}
+  return [];
+}
+function saveAgentTokens(tokens) { ensureDir(); fs.writeFileSync(AGENT_TOKENS_FILE, JSON.stringify(tokens, null, 2)); }
+
+function agentCall(agentId, command, params = {}) {
+  return new Promise((resolve, reject) => {
+    const socket = agentSockets.get(agentId);
+    if (!socket) return reject(new Error(`Agent '${agentId}' not connected`));
+    const reqId = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const timeout = setTimeout(() => reject(new Error('Agent timeout')), 15000);
+    socket.once(`agent:response:${reqId}`, (data) => {
+      clearTimeout(timeout);
+      if (data.error) reject(new Error(data.error));
+      else resolve(data.result);
+    });
+    socket.emit('agent:command', { reqId, command, params });
+  });
+}
+
 function getDocker(hostId) {
   if (!hostId || hostId === 'local') return localDocker;
   const hosts = loadHosts();
   const host = hosts.find(h => h.id === hostId);
   if (!host) throw new Error(`Host '${hostId}' not found`);
+  if (host.type === 'agent') throw new Error(`AGENT:${hostId}`);
   const urlObj = new URL(host.url);
-  return new Docker({ host: urlObj.hostname, port: parseInt(urlObj.port) || 2375, protocol: urlObj.protocol.replace(':', '') });
+  const proto = urlObj.protocol.replace(':', '');
+  return new Docker({ host: urlObj.hostname, port: parseInt(urlObj.port) || 2375, protocol: proto === 'tcp' ? 'http' : proto, timeout: 10000 });
 }
 
 const events = [];
@@ -84,6 +111,40 @@ function authMiddleware(req, res, next) {
 function adminOnly(req, res, next) {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admins only' });
   next();
+}
+
+// ── Docker Command Router (TCP or Agent) ──────────────────────────────────────
+async function dockerCommand(hostId, command, params = {}) {
+  const hosts = loadHosts();
+  const host = hostId && hostId !== 'local' ? hosts.find(h => h.id === hostId) : null;
+  if (host?.type === 'agent') {
+    return agentCall(hostId, command, params);
+  }
+  const docker = getDocker(hostId);
+  switch (command) {
+    case 'listContainers': return docker.listContainers(params);
+    case 'listImages':     return docker.listImages(params);
+    case 'listNetworks':   return docker.listNetworks();
+    case 'listVolumes':    return docker.listVolumes();
+    case 'info':           return docker.info();
+    case 'containerStats': return docker.getContainer(params.id).stats({ stream: false });
+    case 'containerStart':  return docker.getContainer(params.id).start();
+    case 'containerStop':   return docker.getContainer(params.id).stop();
+    case 'containerRestart':return docker.getContainer(params.id).restart();
+    case 'containerInspect':return docker.getContainer(params.id).inspect();
+    case 'containerRemove': {
+      const c = docker.getContainer(params.id);
+      try { await c.stop(); } catch {}
+      return c.remove({ force: true });
+    }
+    case 'imageInspect':   return docker.getImage(params.id).inspect();
+    case 'imageRemove':    return docker.getImage(params.id).remove({ force: params.force });
+    case 'networkInspect': return docker.getNetwork(params.id).inspect();
+    case 'networkRemove':  return docker.getNetwork(params.id).remove();
+    case 'volumeInspect':  return docker.getVolume(params.name).inspect();
+    case 'volumeRemove':   return docker.getVolume(params.name).remove({ force: params.force });
+    default: throw new Error(`Unknown command: ${command}`);
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -136,17 +197,68 @@ app.delete('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
 
 app.post('/api/hosts/:id/test', authMiddleware, adminOnly, async (req, res) => {
   try {
+    const hosts = loadHosts();
+    const host = hosts.find(h => h.id === req.params.id);
+    if (host?.type === 'agent') {
+      const connected = agentSockets.has(req.params.id);
+      if (!connected) return res.status(500).json({ ok: false, error: 'Agent not connected' });
+      const info = await agentCall(req.params.id, 'info');
+      return res.json({ ok: true, version: info.ServerVersion, containers: info.Containers });
+    }
     const docker = getDocker(req.params.id);
     const info = await docker.info();
     res.json({ ok: true, version: info.ServerVersion, containers: info.Containers });
   } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
 });
 
+// ── Agent Tokens ──────────────────────────────────────────────────────────────
+app.get('/api/agent-tokens', authMiddleware, adminOnly, (req, res) => {
+  const tokens = loadAgentTokens();
+  res.json(tokens.map(t => ({ ...t, token: t.token.substring(0, 8) + '...' })));
+});
+
+app.post('/api/agent-tokens', authMiddleware, adminOnly, (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  const tokens = loadAgentTokens();
+  const token = require('crypto').randomBytes(32).toString('hex');
+  const agentId = `agent_${Date.now()}`;
+  const newToken = { id: agentId, name, token, createdAt: new Date().toISOString() };
+  tokens.push(newToken);
+  saveAgentTokens(tokens);
+  // Auto-register as host
+  const hosts = loadHosts();
+  hosts.push({ id: agentId, name, type: 'agent', createdAt: new Date().toISOString() });
+  saveHosts(hosts);
+  logEvent({ type: 'agent:created', actor: req.user.username, target: name });
+  res.json({ ...newToken }); // Return full token only on creation
+});
+
+app.delete('/api/agent-tokens/:id', authMiddleware, adminOnly, (req, res) => {
+  const tokens = loadAgentTokens();
+  const idx = tokens.findIndex(t => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Token not found' });
+  tokens.splice(idx, 1);
+  saveAgentTokens(tokens);
+  // Remove host too
+  const hosts = loadHosts();
+  const hIdx = hosts.findIndex(h => h.id === req.params.id);
+  if (hIdx !== -1) hosts.splice(hIdx, 1);
+  saveHosts(hosts);
+  agentSockets.delete(req.params.id);
+  logEvent({ type: 'agent:deleted', actor: req.user.username, target: req.params.id });
+  res.json({ ok: true });
+});
+
+app.get('/api/agents/status', authMiddleware, (req, res) => {
+  const tokens = loadAgentTokens();
+  res.json(tokens.map(t => ({ id: t.id, name: t.name, connected: agentSockets.has(t.id) })));
+});
+
 // ── Containers ────────────────────────────────────────────────────────────────
 app.get('/api/containers', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const containers = await docker.listContainers({ all: true });
+    const containers = await dockerCommand(req.query.host, 'listContainers', { all: true });
     res.json(containers.map(c => ({
       id: c.Id, shortId: c.Id.substring(0, 12),
       name: c.Names[0]?.replace('/', '') || 'unknown',
@@ -160,9 +272,10 @@ app.get('/api/containers', authMiddleware, async (req, res) => {
 
 app.get('/api/containers/:id/stats', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const container = docker.getContainer(req.params.id);
-    const stats = await container.stats({ stream: false });
+    const stats = await Promise.race([
+      dockerCommand(req.query.host, 'containerStats', { id: req.params.id }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Stats timeout')), 8000))
+    ]);
     const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
     const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
     const numCpus = stats.cpu_stats.online_cpus || stats.cpu_stats.cpu_usage.percpu_usage?.length || 1;
@@ -177,10 +290,9 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
   const { id, action } = req.params;
   if (!['start','stop','restart'].includes(action)) return res.status(400).json({ error: 'Action not allowed' });
   try {
-    const docker = getDocker(req.query.host);
     if (!req.query.host || req.query.host === 'local') markManualStop(id);
-    await docker.getContainer(id)[action]();
-    const containers = await docker.listContainers({ all: true });
+    await dockerCommand(req.query.host, `container${action.charAt(0).toUpperCase() + action.slice(1)}`, { id });
+    const containers = await dockerCommand(req.query.host, 'listContainers', { all: true });
     const c = containers.find(c => c.Id === id);
     const name = c?.Names[0]?.replace('/', '') || id.substring(0, 12);
     logEvent({ type: `container:${action}`, actor: req.user.username, target: name, detail: `${action} executed manually` });
@@ -190,17 +302,13 @@ app.post('/api/containers/:id/:action', authMiddleware, adminOnly, async (req, r
 
 app.get('/api/containers/:id/inspect', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    res.json(await docker.getContainer(req.params.id).inspect());
+    res.json(await dockerCommand(req.query.host, 'containerInspect', { id: req.params.id }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/containers/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const container = docker.getContainer(req.params.id);
-    try { await container.stop(); } catch {}
-    await container.remove({ force: true });
+    await dockerCommand(req.query.host, 'containerRemove', { id: req.params.id });
     logEvent({ type: 'container:delete', actor: req.user.username, target: req.params.id.substring(0,12), detail: 'Container removed' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -264,8 +372,7 @@ app.post('/api/containers/create', authMiddleware, adminOnly, async (req, res) =
 // ── Stacks ────────────────────────────────────────────────────────────────────
 app.get('/api/stacks', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const containers = await docker.listContainers({ all: true });
+    const containers = await dockerCommand(req.query.host, 'listContainers', { all: true });
 
     const stackMap = {};
     containers.forEach(c => {
@@ -415,8 +522,7 @@ app.post('/api/stacks/:name/:action', authMiddleware, adminOnly, async (req, res
 // ── Images ────────────────────────────────────────────────────────────────────
 app.get('/api/images', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const images = await docker.listImages({ all: false });
+    const images = await dockerCommand(req.query.host, 'listImages', { all: false });
     res.json(images.map(img => ({
       id: img.Id,
       shortId: img.Id.replace('sha256:', '').substring(0, 12),
@@ -430,15 +536,13 @@ app.get('/api/images', authMiddleware, async (req, res) => {
 
 app.get('/api/images/:id/inspect', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    res.json(await docker.getImage(req.params.id).inspect());
+    res.json(await dockerCommand(req.query.host, 'imageInspect', { id: req.params.id }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/images/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    await docker.getImage(req.params.id).remove({ force: req.query.force === 'true' });
+    await dockerCommand(req.query.host, 'imageRemove', { id: req.params.id, force: req.query.force === 'true' });
     logEvent({ type: 'image:delete', actor: req.user.username, target: req.params.id.substring(0, 12), detail: 'Image removed' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -479,29 +583,19 @@ app.get('/api/images/search', authMiddleware, async (req, res) => {
 // ── Networks ──────────────────────────────────────────────────────────────────
 app.get('/api/networks', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const networks = await docker.listNetworks();
+    const networks = await dockerCommand(req.query.host, 'listNetworks');
     res.json(networks.map(n => ({
-      id: n.Id,
-      shortId: n.Id.substring(0, 12),
-      name: n.Name,
-      driver: n.Driver,
-      scope: n.Scope,
-      internal: n.Internal,
-      attachable: n.Attachable,
-      created: n.Created,
+      id: n.Id, shortId: n.Id.substring(0, 12), name: n.Name, driver: n.Driver,
+      scope: n.Scope, internal: n.Internal, attachable: n.Attachable, created: n.Created,
       containers: Object.keys(n.Containers || {}).length,
-      subnet: n.IPAM?.Config?.[0]?.Subnet || null,
-      gateway: n.IPAM?.Config?.[0]?.Gateway || null,
+      subnet: n.IPAM?.Config?.[0]?.Subnet || null, gateway: n.IPAM?.Config?.[0]?.Gateway || null,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/networks/:id/inspect', authMiddleware, async (req, res) => {
-  try {
-    const docker = getDocker(req.query.host);
-    res.json(await docker.getNetwork(req.params.id).inspect());
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  try { res.json(await dockerCommand(req.query.host, 'networkInspect', { id: req.params.id })); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/networks', authMiddleware, adminOnly, async (req, res) => {
@@ -510,17 +604,8 @@ app.post('/api/networks', authMiddleware, adminOnly, async (req, res) => {
   try {
     const docker = getDocker(req.query.host);
     const ipamConfig = [];
-    if (subnet) {
-      const cfg = { Subnet: subnet };
-      if (gateway) cfg.Gateway = gateway;
-      ipamConfig.push(cfg);
-    }
-    const network = await docker.createNetwork({
-      Name: name,
-      Driver: driver || 'bridge',
-      Internal: internal || false,
-      IPAM: ipamConfig.length ? { Config: ipamConfig } : undefined,
-    });
+    if (subnet) { const cfg = { Subnet: subnet }; if (gateway) cfg.Gateway = gateway; ipamConfig.push(cfg); }
+    const network = await docker.createNetwork({ Name: name, Driver: driver || 'bridge', Internal: internal || false, IPAM: ipamConfig.length ? { Config: ipamConfig } : undefined });
     logEvent({ type: 'network:create', actor: req.user.username, target: name, detail: `Driver: ${driver || 'bridge'}` });
     res.json({ ok: true, id: network.id });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -528,10 +613,8 @@ app.post('/api/networks', authMiddleware, adminOnly, async (req, res) => {
 
 app.delete('/api/networks/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const network = docker.getNetwork(req.params.id);
-    const info = await network.inspect();
-    await network.remove();
+    const info = await dockerCommand(req.query.host, 'networkInspect', { id: req.params.id });
+    await dockerCommand(req.query.host, 'networkRemove', { id: req.params.id });
     logEvent({ type: 'network:delete', actor: req.user.username, target: info.Name, detail: 'Network removed' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -540,25 +623,15 @@ app.delete('/api/networks/:id', authMiddleware, adminOnly, async (req, res) => {
 // ── Volumes ───────────────────────────────────────────────────────────────────
 app.get('/api/volumes', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const data = await docker.listVolumes();
+    const data = await dockerCommand(req.query.host, 'listVolumes');
     const volumes = data.Volumes || [];
-    res.json(volumes.map(v => ({
-      name: v.Name,
-      driver: v.Driver,
-      mountpoint: v.Mountpoint,
-      scope: v.Scope,
-      created: v.CreatedAt,
-      labels: v.Labels || {},
-    })));
+    res.json(volumes.map(v => ({ name: v.Name, driver: v.Driver, mountpoint: v.Mountpoint, scope: v.Scope, created: v.CreatedAt, labels: v.Labels || {} })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/volumes/:name/inspect', authMiddleware, async (req, res) => {
-  try {
-    const docker = getDocker(req.query.host);
-    res.json(await docker.getVolume(req.params.name).inspect());
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  try { res.json(await dockerCommand(req.query.host, 'volumeInspect', { name: req.params.name })); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/volumes', authMiddleware, adminOnly, async (req, res) => {
@@ -566,11 +639,7 @@ app.post('/api/volumes', authMiddleware, adminOnly, async (req, res) => {
   if (!name) return res.status(400).json({ error: 'Volume name is required' });
   try {
     const docker = getDocker(req.query.host);
-    const volume = await docker.createVolume({
-      Name: name,
-      Driver: driver || 'local',
-      Labels: labels || {},
-    });
+    const volume = await docker.createVolume({ Name: name, Driver: driver || 'local', Labels: labels || {} });
     logEvent({ type: 'volume:create', actor: req.user.username, target: name, detail: `Driver: ${driver || 'local'}` });
     res.json({ ok: true, name: volume.name });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -578,8 +647,7 @@ app.post('/api/volumes', authMiddleware, adminOnly, async (req, res) => {
 
 app.delete('/api/volumes/:name', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    await docker.getVolume(req.params.name).remove({ force: req.query.force === 'true' });
+    await dockerCommand(req.query.host, 'volumeRemove', { name: req.params.name, force: req.query.force === 'true' });
     logEvent({ type: 'volume:delete', actor: req.user.username, target: req.params.name, detail: 'Volume removed' });
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -590,8 +658,10 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.1' }
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
-    const docker = getDocker(req.query.host);
-    const info = await docker.info();
+    const info = await Promise.race([
+      dockerCommand(req.query.host, 'info'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Info timeout')), 8000))
+    ]);
     res.json({ containers: info.Containers, running: info.ContainersRunning, stopped: info.ContainersStopped, images: info.Images, dockerVersion: info.ServerVersion, os: info.OperatingSystem, memory: info.MemTotal, cpus: info.NCPU });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -800,6 +870,37 @@ if (fs.existsSync(path.join(__dirname, 'public', 'index.html'))) {
     }
   });
 }
+
+// ── Agent WebSocket Namespace ─────────────────────────────────────────────────
+const agentIo = new Server(server, { cors: { origin: '*' } });
+const agentNs = agentIo.of('/agent');
+
+agentNs.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) return next(new Error('No token'));
+  const tokens = loadAgentTokens();
+  const found = tokens.find(t => t.token === token);
+  if (!found) return next(new Error('Invalid agent token'));
+  socket.agentId = found.id;
+  socket.agentName = found.name;
+  next();
+});
+
+agentNs.on('connection', (socket) => {
+  agentSockets.set(socket.agentId, socket);
+  console.log(`Agent connected: ${socket.agentName} (${socket.agentId})`);
+  io.emit('agent:status', { id: socket.agentId, name: socket.agentName, connected: true });
+
+  socket.on('agent:response', ({ reqId, result, error }) => {
+    socket.emit(`agent:response:${reqId}`, { result, error });
+  });
+
+  socket.on('disconnect', () => {
+    agentSockets.delete(socket.agentId);
+    console.log(`Agent disconnected: ${socket.agentName}`);
+    io.emit('agent:status', { id: socket.agentId, name: socket.agentName, connected: false });
+  });
+});
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));
