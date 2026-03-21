@@ -35,7 +35,7 @@
 - 📋 **Event history** — full log of container lifecycle events
 - 🚀 **Stack deploy** — deploy docker-compose stacks from the UI with YAML editor
 - 🔍 **Docker Scout** — CVE scanning integrated directly in image management
-- 🖥️ **Multi-host** — manage multiple Docker hosts via NEXUS Proxy agent
+- 🖥️ **Multi-host** — manage multiple Docker hosts via NEXUS Agent (Windows, Linux, macOS)
 
 ---
 
@@ -62,9 +62,82 @@ Open **http://localhost:9090** — default credentials: `admin` / `admin`
 
 ---
 
+## 🖥️ Multi-host setup
+
+NEXUS supports managing multiple Docker hosts via **NEXUS Agent** — a lightweight container that runs on each remote machine and connects back to NEXUS over WebSocket. No open ports required on the client. Works on Windows, Linux, and macOS.
+
+### 1. Generate an agent token
+
+In NEXUS go to **Settings → Hosts** and click **Add host**. Choose **Agent** type, give it a name and copy the generated token.
+
+Alternatively via API:
+```bash
+curl -X POST http://YOUR_NEXUS_IP:9090/api/agent-tokens \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-remote-host"}'
+```
+
+### 2. Run NEXUS Agent on the remote machine
+
+Create a `.env` file:
+
+```bash
+NEXUS_URL=http://YOUR_NEXUS_IP:9090
+NEXUS_AGENT_TOKEN=YOUR_TOKEN_HERE
+```
+
+**Linux / macOS:**
+```yaml
+# docker-compose.yml
+services:
+  nexus-agent:
+    image: afraguas1983/nexus-agent:latest
+    container_name: nexus-agent
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+**Windows (Docker Desktop):**
+```yaml
+# docker-compose.yml
+services:
+  nexus-agent:
+    image: afraguas1983/nexus-agent:latest
+    container_name: nexus-agent
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DOCKER_HOST=tcp://host.docker.internal:2375
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+```
+
+> ⚠️ Windows requires the `nexus-dockerproxy` running on port 2375. See `agent/docker-compose.yml` for the full example.
+
+```bash
+docker compose up -d
+```
+
+The agent connects automatically to NEXUS and the remote host appears in the server selector. No firewall rules or port forwarding needed — the connection is always outbound from the agent.
+
+---
+
 ## 🗺️ Roadmap
 
-### v1.5.1 — Current ✅
+### v1.5.2 — Current ✅
+- **NEXUS Agent** — universal multi-host support via WebSocket
+  - Works on Windows, Linux, and macOS — with or without Docker Desktop
+  - Outbound connection only — no open ports on the client
+  - Token-based authentication
+  - Auto-reconnect on network interruption
+- Login card redesign — consistent with NEXUS Watcher and Hub
+- Sidebar logo and subtitle update
+- i18n improvements
+
+### v1.5.1 ✅
 - Vite migration (eliminated all frontend CVEs)
 - node:24-alpine base image
 - Networks & Volumes management
