@@ -127,6 +127,14 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 
 ## 🗺️ Roadmap
 
+### v1.5.1 ✅
+- Vite migration (eliminated all frontend CVEs)
+- node:24-alpine base image
+- Networks & Volumes management
+- Docker Scout CVE integration
+- Full EN/ES i18n
+- PWA support
+
 ### v1.5.2 — Current ✅
 - **NEXUS Agent** — universal multi-host support via WebSocket
   - Works on Windows, Linux, and macOS — with or without Docker Desktop
@@ -136,14 +144,6 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - Login card redesign — consistent with NEXUS Watcher and Hub
 - Sidebar logo and subtitle update
 - i18n improvements
-
-### v1.5.1 ✅
-- Vite migration (eliminated all frontend CVEs)
-- node:24-alpine base image
-- Networks & Volumes management
-- Docker Scout CVE integration
-- Full EN/ES i18n
-- PWA support
 
 ### v1.6.0 — Watcher integration _(coming soon)_
 - Updates widget on dashboard showing pending image updates
