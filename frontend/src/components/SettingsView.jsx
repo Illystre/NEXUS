@@ -170,17 +170,40 @@ function UsersPanel({ showToast }) {
   );
 }
 
+// ── OS Icons ──────────────────────────────────────────────────────────────────
+const OS_OPTIONS = [
+  { id:'windows', label:'Windows',     src:null,    hint:'Enable "Expose daemon on tcp://localhost:2375" in Docker Desktop → Settings → General' },
+  { id:'ubuntu',  label:'Ubuntu',      src:'https://cdn.simpleicons.org/ubuntu/E95420' },
+  { id:'debian',  label:'Debian',      src:'https://cdn.simpleicons.org/debian/A81D33' },
+  { id:'fedora',  label:'Fedora',      src:'https://cdn.simpleicons.org/fedora/51A2DA' },
+  { id:'rhel',    label:'Red Hat',     src:'https://cdn.simpleicons.org/redhat/EE0000' },
+  { id:'rocky',   label:'Rocky Linux', src:'https://cdn.simpleicons.org/rockylinux/10B981' },
+  { id:'alpine',  label:'Alpine',      src:'https://cdn.simpleicons.org/alpinelinux/0D597F' },
+  { id:'linux',   label:'Other Linux', src:'https://cdn.simpleicons.org/linux/FCC624' },
+];
+
+function OsIcon({ os }) {
+  const found = OS_OPTIONS.find(o => o.id === os);
+  if (os === 'windows') return <svg viewBox="0 0 32 32" width="22" height="22" xmlns="http://www.w3.org/2000/svg" style={{display:"block"}}><path fill="#00ADEF" d="M30,15H17c-0.6,0-1-0.4-1-1V3.3c0-0.5,0.4-0.9,0.8-1l13-2.3c0.3,0,0.6,0,0.8,0.2C30.9,0.4,31,0.7,31,1v13C31,14.6,30.6,15,30,15z"/><path fill="#00ADEF" d="M13,15H1c-0.6,0-1-0.4-1-1V6c0-0.5,0.4-0.9,0.8-1l12-2c0.3,0,0.6,0,0.8,0.2C13.9,3.4,14,3.7,14,4v10C14,14.6,13.6,15,13,15z"/><path fill="#00ADEF" d="M30,32c-0.1,0-0.1,0-0.2,0l-13-2.3c-0.5-0.1-0.8-0.5-0.8-1V18c0-0.6,0.4-1,1-1h13c0.6,0,1,0.4,1,1v13c0,0.3-0.1,0.6-0.4,0.8C30.5,31.9,30.2,32,30,32z"/><path fill="#00ADEF" d="M13,29c-0.1,0-0.1,0-0.2,0l-12-2C0.4,26.9,0,26.5,0,26v-8c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v10c0,0.3-0.1,0.6-0.4,0.8C13.5,28.9,13.2,29,13,29z"/></svg>;
+  if (!found || !found.src) return <img src="https://cdn.simpleicons.org/linux/FCC624" width="22" height="22" alt="Linux" />;
+  return <img src={found.src} width="22" height="22" alt={found.label} style={{display:'block'}} />;
+}
+
+
+// ── HostsPanel ────────────────────────────────────────────────────────────────
 function HostsPanel({ showToast, onHostsChange }) {
   const { t } = useLang();
   const l = t.settings;
-  const [hosts, setHosts]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [form, setForm]       = useState({ name: '', url: '' });
-  const [creating, setCreating] = useState(false);
-  const [editId, setEditId]   = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', url: '' });
+  const [hosts, setHosts]       = useState([]);
+  const [loading, setLoading]   = useState(true);
   const [testingId, setTestingId] = useState(null);
   const [testResults, setTestResults] = useState({});
+  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardName, setWizardName] = useState('');
+  const [wizardOS, setWizardOS]     = useState('ubuntu');
+  const [wizardResult, setWizardResult] = useState(null);
+  const [wizardCreating, setWizardCreating] = useState(false);
+  const [copied, setCopied]         = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -188,27 +211,6 @@ function HostsPanel({ showToast, onHostsChange }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
-
-  const create = async () => {
-    if (!form.name || !form.url) return showToast('Name and URL required', 'error');
-    setCreating(true);
-    try {
-      await axios.post('/api/hosts', form);
-      setForm({ name: '', url: '' });
-      await load();
-      showToast(l.saved);
-    } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
-    finally { setCreating(false); }
-  };
-
-  const update = async (id) => {
-    try {
-      await axios.put(`/api/hosts/${id}`, editForm);
-      setEditId(null);
-      await load();
-      showToast(l.saved);
-    } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
-  };
 
   const remove = async (id, name) => {
     if (!window.confirm(`Delete host "${name}"?`)) return;
@@ -228,8 +230,129 @@ function HostsPanel({ showToast, onHostsChange }) {
     finally { setTestingId(null); }
   };
 
+  const generateToken = async () => {
+    if (!wizardName.trim()) return;
+    setWizardCreating(true);
+    try {
+      const r = await axios.post('/api/agent-tokens', { name: wizardName.trim(), os: wizardOS });
+      setWizardResult(r.data);
+      setWizardStep(3);
+      await load();
+    } catch (e) { showToast(e.response?.data?.error || 'Error', 'error'); }
+    finally { setWizardCreating(false); }
+  };
+
+  const getCompose = (nexusUrl, token, os) => {
+    const base = `services:\n  nexus-agent:\n    image: afraguas1983/nexus-agent:latest\n    container_name: nexus-agent\n    restart: unless-stopped\n    environment:\n      - NEXUS_URL=${nexusUrl}\n      - NEXUS_AGENT_TOKEN=${token}`;
+    if (os === 'windows') {
+      return base + `\n      - DOCKER_HOST=tcp://host.docker.internal:2375\n    extra_hosts:\n      - "host.docker.internal:host-gateway"`;
+    }
+    return base + `\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock`;
+  };
+
+  const nexusUrl = window.location.origin;
+
+  const copyCompose = () => {
+    navigator.clipboard.writeText(getCompose(nexusUrl, wizardResult?.token, wizardOS));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const closeWizard = () => {
+    setWizardStep(0); setWizardName(''); setWizardOS('ubuntu');
+    setWizardResult(null); setCopied(false);
+  };
+
+  const currentOsHint = OS_OPTIONS.find(o => o.id === wizardOS)?.hint;
+
   return (
     <>
+      {wizardStep > 0 && (
+        <div style={sw.overlay} onClick={e => e.target === e.currentTarget && closeWizard()}>
+          <div style={sw.modal}>
+
+            {wizardStep === 1 && (
+              <>
+                <div style={sw.modalHead}>
+                  <div style={sw.modalTitle}>🖥 Add remote host</div>
+                  <div style={sw.modalSub}>Give this host a name to identify it in NEXUS</div>
+                </div>
+                <div style={sw.modalBody}>
+                  <label style={sw.label}>Host name</label>
+                  <input style={sw.input} value={wizardName} autoFocus
+                    onChange={e => setWizardName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && wizardName.trim() && setWizardStep(2)}
+                    placeholder="e.g. My Server, NAS, VPS..." />
+                </div>
+                <div style={sw.modalFoot}>
+                  <button style={sw.cancelBtn} onClick={closeWizard}>Cancel</button>
+                  <button style={sw.nextBtn} onClick={() => setWizardStep(2)} disabled={!wizardName.trim()}>Next →</button>
+                </div>
+              </>
+            )}
+
+            {wizardStep === 2 && (
+              <>
+                <div style={sw.modalHead}>
+                  <div style={sw.modalTitle}>🖥 {wizardName}</div>
+                  <div style={sw.modalSub}>What OS is running on this remote host?</div>
+                </div>
+                <div style={sw.modalBody}>
+                  <div style={sw.distroGrid}>
+                    {OS_OPTIONS.map(os => (
+                      <button key={os.id}
+                        style={{...sw.distroBtn, ...(wizardOS===os.id ? sw.distroBtnActive : {})}}
+                        onClick={() => setWizardOS(os.id)}>
+                        {os.id === 'windows' ? <svg viewBox="0 0 32 32" width="22" height="22" xmlns="http://www.w3.org/2000/svg" style={{display:"block"}}><path fill="#00ADEF" d="M30,15H17c-0.6,0-1-0.4-1-1V3.3c0-0.5,0.4-0.9,0.8-1l13-2.3c0.3,0,0.6,0,0.8,0.2C30.9,0.4,31,0.7,31,1v13C31,14.6,30.6,15,30,15z"/><path fill="#00ADEF" d="M13,15H1c-0.6,0-1-0.4-1-1V6c0-0.5,0.4-0.9,0.8-1l12-2c0.3,0,0.6,0,0.8,0.2C13.9,3.4,14,3.7,14,4v10C14,14.6,13.6,15,13,15z"/><path fill="#00ADEF" d="M30,32c-0.1,0-0.1,0-0.2,0l-13-2.3c-0.5-0.1-0.8-0.5-0.8-1V18c0-0.6,0.4-1,1-1h13c0.6,0,1,0.4,1,1v13c0,0.3-0.1,0.6-0.4,0.8C30.5,31.9,30.2,32,30,32z"/><path fill="#00ADEF" d="M13,29c-0.1,0-0.1,0-0.2,0l-12-2C0.4,26.9,0,26.5,0,26v-8c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v10c0,0.3-0.1,0.6-0.4,0.8C13.5,28.9,13.2,29,13,29z"/></svg> : <img src={os.src} width="22" height="22" alt={os.label} style={{display:'block'}} />}
+                        <span style={sw.distroLabel}>{os.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {currentOsHint && (
+                    <div style={sw.osHintBox}>⚠ {currentOsHint}</div>
+                  )}
+                </div>
+                <div style={sw.modalFoot}>
+                  <button style={sw.cancelBtn} onClick={() => setWizardStep(1)}>← Back</button>
+                  <button style={sw.nextBtn} onClick={generateToken} disabled={wizardCreating}>
+                    {wizardCreating ? 'Generating...' : 'Generate token →'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {wizardStep === 3 && wizardResult && (
+              <>
+                <div style={sw.modalHead}>
+                  <div style={sw.modalTitle}>✅ Token generated for {wizardResult.name}</div>
+                  <div style={sw.modalSub}>Copy this docker-compose.yml to your remote host and run <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>docker compose up -d</code></div>
+                </div>
+                <div style={sw.modalBody}>
+                  <div style={sw.osToggle}>
+                    {OS_OPTIONS.map(os => (
+                      <button key={os.id}
+                        style={{...sw.osToggleBtn, ...(wizardOS===os.id ? sw.osToggleBtnActive : {})}}
+                        onClick={() => setWizardOS(os.id)} title={os.label}>
+                        <img src={os.src} width="16" height="16" alt={os.label} style={{display:'block'}} />
+                      </button>
+                    ))}
+                  </div>
+                  <pre style={sw.codeBlock}>{getCompose(nexusUrl, wizardResult.token, wizardOS)}</pre>
+                  <div style={sw.tokenWarn}>⚠ This token is only shown once. Make sure to copy the compose above.</div>
+                </div>
+                <div style={sw.modalFoot}>
+                  <button style={sw.cancelBtn} onClick={closeWizard}>Close</button>
+                  <button style={{...sw.nextBtn, ...(copied ? {background:'var(--success)',borderColor:'var(--success)',color:'#000'} : {})}} onClick={copyCompose}>
+                    {copied ? '✔ Copied!' : '📋 Copy docker-compose.yml'}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
       <Section title={l.hostsTitle} subtitle={l.hostsSubtitle}>
         {loading ? (
           <div style={{padding:'20px',textAlign:'center',color:'var(--text-muted)',fontSize:'0.85em'}}>Loading...</div>
@@ -238,85 +361,65 @@ function HostsPanel({ showToast, onHostsChange }) {
         ) : (
           hosts.map(h => (
             <div key={h.id} style={s.hostItemRow}>
-              <div style={s.hostItemIcon}>🌐</div>
+              <div style={{...s.hostItemIcon, display:'flex', alignItems:'center'}}>
+                {h.type === 'agent' ? <OsIcon os={h.os} /> : '🌐'}
+              </div>
               <div style={s.hostItemInfo}>
-                {editId === h.id ? (
-                  <div style={s.editRow}>
-                    <input style={{...s.input, width:'120px'}} value={editForm.name} onChange={e => setEditForm(p=>({...p,name:e.target.value}))} placeholder="Name" />
-                    <input style={{...s.input, width:'200px', fontFamily:'var(--font-mono)', fontSize:'0.8em'}} value={editForm.url} onChange={e => setEditForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
-                    <button style={s.saveSmallBtn} onClick={() => update(h.id)}>✔</button>
-                    <button style={s.cancelBtn} onClick={() => setEditId(null)}>✕</button>
+                <div style={s.hostItemName}>{h.name}</div>
+                <div style={s.hostItemUrl}>{h.type === 'agent' ? `NEXUS Agent · ${OS_OPTIONS.find(o=>o.id===h.os)?.label || 'Linux'}` : h.url}</div>
+                {testResults[h.id] && (
+                  <div style={{fontSize:'0.75em', marginTop:'4px', color: testResults[h.id].ok ? 'var(--success)' : 'var(--danger)'}}>
+                    {testResults[h.id].msg}
                   </div>
-                ) : (
-                  <>
-                    <div style={s.hostItemName}>{h.name}</div>
-                    <div style={s.hostItemUrl}>{h.url}</div>
-                    {testResults[h.id] && (
-                      <div style={{fontSize:'0.75em', marginTop:'4px', color: testResults[h.id].ok ? 'var(--success)' : 'var(--danger)'}}>
-                        {testResults[h.id].msg}
-                      </div>
-                    )}
-                  </>
                 )}
               </div>
-              {editId !== h.id && (
-                <div style={s.userActions}>
-                  <button
-                    style={{...s.editBtn, color:'var(--brand-light)', borderColor:'var(--border-focus)'}}
-                    onClick={() => test(h.id)}
-                    disabled={testingId === h.id}
-                  >
-                    {testingId === h.id ? '...' : l.testBtn}
-                  </button>
-                  <button style={s.editBtn} onClick={() => { setEditId(h.id); setEditForm({ name: h.name, url: h.url }); }}>✎</button>
-                  <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗒</button>
-                </div>
-              )}
+              <div style={s.userActions}>
+                <button style={{...s.editBtn, color:'var(--brand-light)', borderColor:'var(--border-focus)'}}
+                  onClick={() => test(h.id)} disabled={testingId === h.id}>
+                  {testingId === h.id ? '...' : l.testBtn}
+                </button>
+                <button style={s.deleteBtn} onClick={() => remove(h.id, h.name)}>🗒</button>
+              </div>
             </div>
           ))
         )}
       </Section>
 
       <Section title={l.addHost}>
-        <Field label={l.hostName} hint={l.hostNameHint}>
-          <input style={{...s.input, width:'180px'}} value={form.name} onChange={e => setForm(p=>({...p,name:e.target.value}))} placeholder="My server" />
-        </Field>
-        <Field label={l.hostUrl} hint={<>e.g. <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>http://192.168.1.50:2375</code></>}>
-          <input style={{...s.input, width:'240px', fontFamily:'var(--font-mono)', fontSize:'0.85em'}} value={form.url} onChange={e => setForm(p=>({...p,url:e.target.value}))} placeholder="http://ip:2375" />
-        </Field>
-        <div style={s.fieldActions}>
-          <button style={s.saveBtn} onClick={create} disabled={creating || !form.name || !form.url}>
-            {creating ? l.adding : l.addHostBtn}
-          </button>
-        </div>
-      </Section>
-
-      <Section title={l.hostConfigTitle} subtitle={l.hostConfigSubtitle}>
         <div style={{padding:'14px 18px'}}>
-          <div style={{fontSize:'0.82em',color:'var(--text-secondary)',marginBottom:'10px'}}>
-            {l.hostConfigText} <code style={s.code}>docker-compose.yml</code>:
-          </div>
-          <pre style={s.codeBlock}>{`services:
-  dockerproxy:
-    image: tecnativa/docker-socket-proxy:latest
-    restart: unless-stopped
-    ports:
-      - "2375:2375"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - CONTAINERS=1
-      - IMAGES=1
-      - INFO=1
-      - NETWORKS=1
-      - STATS=1
-      - POST=1`}</pre>
-          <div style={{fontSize:'0.78em',color:'var(--text-muted)',marginTop:'8px'}}>{l.hostConfigWarning}</div>
+          <p style={{fontSize:'0.85em',color:'var(--text-secondary)',marginBottom:'12px'}}>
+            Add a remote Docker host using <strong>NEXUS Agent</strong> — a lightweight container that runs on the remote machine and connects back to NEXUS. No open ports required.
+          </p>
+          <button style={s.saveBtn} onClick={() => setWizardStep(1)}>+ Add remote host</button>
         </div>
       </Section>
     </>
   );
 }
+
+const sw = {
+  overlay:{position:'fixed',inset:0,background:'#00000080',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000},
+  modal:{background:'var(--bg-surface)',border:'1px solid var(--border)',borderRadius:'var(--radius-lg)',width:'100%',maxWidth:'560px',overflow:'hidden',boxShadow:'0 20px 60px #00000060'},
+  modalHead:{padding:'20px 24px',borderBottom:'1px solid var(--border)',background:'var(--bg-elevated)'},
+  modalTitle:{fontWeight:700,fontSize:'1em',marginBottom:'4px'},
+  modalSub:{fontSize:'0.8em',color:'var(--text-muted)'},
+  modalBody:{padding:'20px 24px'},
+  modalFoot:{padding:'14px 24px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'flex-end',gap:'8px'},
+  label:{display:'block',fontSize:'0.78em',fontWeight:500,color:'var(--text-secondary)',marginBottom:'6px'},
+  input:{width:'100%',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'10px 14px',color:'var(--text-primary)',fontFamily:'var(--font-sans)',fontSize:'0.9em',outline:'none',boxSizing:'border-box'},
+  cancelBtn:{padding:'8px 16px',background:'transparent',border:'1px solid var(--border)',borderRadius:'var(--radius)',color:'var(--text-muted)',fontFamily:'var(--font-sans)',fontSize:'0.85em',cursor:'pointer'},
+  nextBtn:{padding:'8px 16px',background:'var(--brand-glow)',border:'1px solid var(--border-focus)',borderRadius:'var(--radius)',color:'var(--brand-light)',fontFamily:'var(--font-sans)',fontSize:'0.85em',fontWeight:600,cursor:'pointer'},
+  distroGrid:{display:'grid',gridTemplateColumns:'repeat(4, 1fr)',gap:'8px'},
+  distroBtn:{padding:'12px 8px',background:'var(--bg)',border:'2px solid var(--border)',borderRadius:'var(--radius)',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'6px',transition:'all 0.15s'},
+  distroBtnActive:{borderColor:'var(--brand)',background:'var(--brand-glow)'},
+  distroLabel:{fontSize:'0.7em',fontWeight:500,color:'var(--text-secondary)',textAlign:'center'},
+  osHintBox:{fontSize:'0.75em',color:'var(--warning)',marginTop:'10px',padding:'8px 12px',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)'},
+  osToggle:{display:'flex',gap:'4px',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'3px',marginBottom:'12px',flexWrap:'wrap'},
+  osToggleBtn:{padding:'6px 8px',background:'transparent',border:'none',borderRadius:'var(--radius-sm)',color:'var(--text-muted)',cursor:'pointer',display:'flex',alignItems:'center'},
+  osToggleBtnActive:{background:'var(--bg-elevated)'},
+  codeBlock:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px',fontSize:'0.75em',fontFamily:'var(--font-mono)',color:'var(--text-secondary)',overflowX:'auto',lineHeight:1.7,margin:0},
+  tokenWarn:{fontSize:'0.75em',color:'var(--warning)',marginTop:'10px'},
+};
 
 export default function SettingsView({ onSettingsChange, onHostsChange }) {
   const { role } = useAuth();
@@ -347,10 +450,7 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
     axios.get('/api/settings').then(r => setSettings(r.data)).finally(() => setLoading(false));
   }, []);
 
-  // Reset to valid tab when lang changes
-  useEffect(() => {
-    setTab('appearance');
-  }, [lang]);
+  useEffect(() => { setTab('appearance'); }, [lang]);
 
   const showToast = (msg, type = 'success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
@@ -409,7 +509,6 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
   return (
     <div style={s.page}>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
-
       <div style={s.subTabs}>
         {TABS.map(tb => (
           <button key={tb.id} style={{...s.subTab, ...(tab===tb.id?s.subTabActive:{})}} onClick={() => setTab(tb.id)}>
@@ -418,7 +517,6 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
           </button>
         ))}
       </div>
-
       <div style={s.content}>
         {tab==='appearance' && (
           <>
@@ -451,7 +549,6 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
             </Section>
           </>
         )}
-
         {tab==='profile' && (
           <Section title={l.changePassword}>
             <Field label={l.currentPassword}><input style={s.input} type="password" value={currentPass} onChange={e=>setCurrentPass(e.target.value)} placeholder="••••••••" /></Field>
@@ -464,11 +561,8 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
             </div>
           </Section>
         )}
-
         {tab==='users' && isAdmin && <UsersPanel showToast={showToast} />}
-
         {tab==='hosts' && isAdmin && <HostsPanel showToast={showToast} onHostsChange={onHostsChange} />}
-
         {tab==='telegram' && isAdmin && (
           <Section title={l.telegramTitle}>
             <Field label={l.telegramToken} hint={<>{l.telegramTokenHint} <a href="https://t.me/botfather" target="_blank" rel="noreferrer" style={{color:'var(--brand-light)'}}>@BotFather</a></>}>
@@ -485,7 +579,6 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
             </div>
           </Section>
         )}
-
         {tab==='system' && isAdmin && (
           <>
             <Section title={l.refreshInterval}>

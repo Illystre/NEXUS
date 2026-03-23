@@ -66,66 +66,23 @@ Open **http://localhost:9090** — default credentials: `admin` / `admin`
 
 # NEXUS Agent
 
-Lightweight container that connects your Docker host to NEXUS for multi-host management.
+### Adding a remote host
 
-- Outbound WebSocket connection — no open ports required on the client
-- Works on **Windows, Linux, and macOS**
-- Token-based authentication
-- Auto-reconnect on network interruption
+1. In NEXUS go to **Settings → Hosts** and click **+ Add remote host**
+2. Give the host a name (e.g. `My Server`, `NAS`, `VPS`)
+3. Select the OS running on the remote machine (Windows, Ubuntu, Debian, Fedora, Red Hat, Rocky Linux, Alpine, or Other Linux)
+4. Click **Generate token →** — NEXUS generates a token and shows a ready-to-use `docker-compose.yml` with everything pre-filled
+5. Copy the `docker-compose.yml` to your remote machine and run:
 
-## Quickstart
-
-### 1. Generate a token
-
-In NEXUS go to **Settings → Hosts → Add host** and generate an agent token.
-
-### 2. Create a `.env` file
-
-Copy `.env.example` to `.env` and fill in your values:
-
-```bash
-NEXUS_URL=http://YOUR_NEXUS_IP:9090
-NEXUS_AGENT_TOKEN=YOUR_TOKEN_HERE
-```
-
-### 3. Run the agent
-
-**Linux / macOS:**
-```yaml
-services:
-  nexus-agent:
-    image: afraguas1983/nexus-agent:latest
-    container_name: nexus-agent
-    restart: unless-stopped
-    env_file: .env
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-```
-
-**Windows (Docker Desktop):**
-
-First, enable the Docker daemon TCP port:
-> Docker Desktop → Settings → General → ✅ **Expose daemon on tcp://localhost:2375 without TLS**
-
-Then use this compose:
-```yaml
-services:
-  nexus-agent:
-    image: afraguas1983/nexus-agent:latest
-    container_name: nexus-agent
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      - DOCKER_HOST=tcp://host.docker.internal:2375
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-```
 
 ```bash
 docker compose up -d
 ```
 
-The agent connects automatically to NEXUS and the remote host appears in the server selector.
+=======
+The agent connects automatically to NEXUS and the remote host appears in the server selector. No firewall rules, no port forwarding, no manual `.env` files — the connection is always outbound from the agent.
+
+> ⚠️ **Windows only:** Before running the agent, enable the Docker daemon TCP port in Docker Desktop → Settings → General → ✅ *Expose daemon on tcp://localhost:2375 without TLS*
 
 ---
 
@@ -139,15 +96,24 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - Full EN/ES i18n
 - PWA support
 
-### v1.5.2 — Current ✅
+### v1.5.2 ✅
 - **NEXUS Agent** — universal multi-host support via WebSocket
   - Works on Windows, Linux, and macOS — with or without Docker Desktop
   - Outbound connection only — no open ports on the client
   - Token-based authentication
   - Auto-reconnect on network interruption
-- Login card redesign — consistent with NEXUS Watcher and Hub
+- Login card redesign
 - Sidebar logo and subtitle update
 - i18n improvements
+
+### v1.5.3 — Current ✅
+- **Add host wizard** — 3-step guided flow in Settings → Hosts
+  - Step 1: name the host
+  - Step 2: select OS (Windows, Ubuntu, Debian, Fedora, Red Hat, Rocky Linux, Alpine, Other Linux)
+  - Step 3: NEXUS generates a ready-to-use `docker-compose.yml` with token pre-filled
+- OS logos in host selector and host list
+- Custom dropdown server selector with OS icons
+- One-command agent deployment — no manual `.env` required
 
 ### v1.6.0 — Watcher integration _(coming soon)_
 - Updates widget on dashboard showing pending image updates

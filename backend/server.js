@@ -218,17 +218,17 @@ app.get('/api/agent-tokens', authMiddleware, adminOnly, (req, res) => {
 });
 
 app.post('/api/agent-tokens', authMiddleware, adminOnly, (req, res) => {
-  const { name } = req.body;
+  const { name, os } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const tokens = loadAgentTokens();
   const token = require('crypto').randomBytes(32).toString('hex');
   const agentId = `agent_${Date.now()}`;
-  const newToken = { id: agentId, name, token, createdAt: new Date().toISOString() };
+  const newToken = { id: agentId, name, os: os || 'linux', token, createdAt: new Date().toISOString() };
   tokens.push(newToken);
   saveAgentTokens(tokens);
   // Auto-register as host
   const hosts = loadHosts();
-  hosts.push({ id: agentId, name, type: 'agent', createdAt: new Date().toISOString() });
+  hosts.push({ id: agentId, name, type: 'agent', os: os || 'linux', createdAt: new Date().toISOString() });
   saveHosts(hosts);
   logEvent({ type: 'agent:created', actor: req.user.username, target: name });
   res.json({ ...newToken }); // Return full token only on creation
@@ -654,7 +654,7 @@ app.delete('/api/volumes/:name', authMiddleware, adminOnly, async (req, res) => 
 });
 
 // ── Info ──────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.2' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.3' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import ContainerList from './ContainerList';
@@ -13,6 +13,96 @@ import ImagesView from './ImagesView';
 import NetworksView from './NetworksView';
 import VolumesView from './VolumesView';
 import { useLang } from './LanguageContext';
+
+// ── OS Icons ──────────────────────────────────────────────────────────────────
+const OS_META = {
+  windows: { src: null, label: 'Windows' },
+  ubuntu:  { src: 'https://cdn.simpleicons.org/ubuntu/E95420', label: 'Ubuntu' },
+  debian:  { src: 'https://cdn.simpleicons.org/debian/A81D33', label: 'Debian' },
+  fedora:  { src: 'https://cdn.simpleicons.org/fedora/51A2DA', label: 'Fedora' },
+  rhel:    { src: 'https://cdn.simpleicons.org/redhat/EE0000', label: 'Red Hat' },
+  rocky:   { src: 'https://cdn.simpleicons.org/rockylinux/10B981', label: 'Rocky Linux' },
+  alpine:  { src: 'https://cdn.simpleicons.org/alpinelinux/0D597F', label: 'Alpine' },
+  linux:   { src: 'https://cdn.simpleicons.org/linux/FCC624', label: 'Linux' },
+  local:   { src: null, label: 'Local' },
+};
+function HostIcon({ os }) {
+  const meta = OS_META[os] || OS_META.linux;
+  if (os === 'windows') return <svg viewBox="0 0 32 32" width="16" height="16" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}><path fill="#00ADEF" d="M30,15H17c-0.6,0-1-0.4-1-1V3.3c0-0.5,0.4-0.9,0.8-1l13-2.3c0.3,0,0.6,0,0.8,0.2C30.9,0.4,31,0.7,31,1v13C31,14.6,30.6,15,30,15z"/><path fill="#00ADEF" d="M13,15H1c-0.6,0-1-0.4-1-1V6c0-0.5,0.4-0.9,0.8-1l12-2c0.3,0,0.6,0,0.8,0.2C13.9,3.4,14,3.7,14,4v10C14,14.6,13.6,15,13,15z"/><path fill="#00ADEF" d="M30,32c-0.1,0-0.1,0-0.2,0l-13-2.3c-0.5-0.1-0.8-0.5-0.8-1V18c0-0.6,0.4-1,1-1h13c0.6,0,1,0.4,1,1v13c0,0.3-0.1,0.6-0.4,0.8C30.5,31.9,30.2,32,30,32z"/><path fill="#00ADEF" d="M13,29c-0.1,0-0.1,0-0.2,0l-12-2C0.4,26.9,0,26.5,0,26v-8c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v10c0,0.3-0.1,0.6-0.4,0.8C13.5,28.9,13.2,29,13,29z"/></svg>;
+  if (!meta.src) return (
+    <svg viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+      <path fill="var(--brand)" d="M20 18c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+    </svg>
+  );
+  return <img src={meta.src} width="16" height="16" style={{flexShrink:0, display:'block'}} alt={meta.label} />;
+}
+
+
+// ── Custom Host Selector ──────────────────────────────────────────────────────
+function HostSelector({ hosts, selectedHost, onSelect, localLabel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const allOptions = [
+    { id: 'local', name: localLabel, os: 'local' },
+    ...hosts,
+  ];
+  const current = allOptions.find(h => h.id === selectedHost) || allOptions[0];
+
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width:'100%', display:'flex', alignItems:'center', gap:'8px',
+          background:'var(--bg-elevated)', border:'1px solid var(--border)',
+          borderRadius:'var(--radius)', color:'var(--text-primary)',
+          fontFamily:'var(--font-sans)', fontSize:'0.85em',
+          padding:'7px 10px', cursor:'pointer', outline:'none',
+          justifyContent:'space-between',
+        }}
+      >
+        <span style={{display:'flex',alignItems:'center',gap:'8px'}}>
+          <HostIcon os={current.os || 'local'} />
+          {current.name}
+        </span>
+        <span style={{fontSize:'0.7em',color:'var(--text-muted)'}}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+          background:'var(--bg-elevated)', border:'1px solid var(--border)',
+          borderRadius:'var(--radius)', zIndex:200, overflow:'hidden',
+          boxShadow:'0 8px 24px #00000040',
+        }}>
+          {allOptions.map(h => (
+            <button key={h.id}
+              onClick={() => { onSelect(h.id); setOpen(false); }}
+              style={{
+                width:'100%', display:'flex', alignItems:'center', gap:'8px',
+                padding:'8px 10px', background: h.id === selectedHost ? 'var(--brand-glow)' : 'transparent',
+                border:'none', color: h.id === selectedHost ? 'var(--brand-light)' : 'var(--text-primary)',
+                fontFamily:'var(--font-sans)', fontSize:'0.85em', cursor:'pointer',
+                textAlign:'left',
+              }}
+            >
+              <HostIcon os={h.os || 'local'} />
+              {h.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 
 function applyTheme(settings) {
   if (!settings) return;
@@ -81,11 +171,14 @@ export default function Dashboard() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [cRes, iRes] = await Promise.all([
+      const [cRes, iRes] = await Promise.allSettled([
         axios.get(`/api/containers${hostParam}`),
         axios.get(`/api/info${hostParam}`)
       ]);
-      setContainers(cRes.data); setInfo(iRes.data); setLastRefresh(new Date());
+      if (cRes.status === 'fulfilled') setContainers(cRes.value.data);
+      else if (cRes.reason?.response?.status === 401) { logout(); return; }
+      if (iRes.status === 'fulfilled') setInfo(iRes.value.data);
+      setLastRefresh(new Date());
     } catch(e) { if (e.response?.status === 401) logout(); }
     finally { setLoading(false); }
   }, [logout, hostParam]);
@@ -162,10 +255,12 @@ export default function Dashboard() {
           {hosts.length > 0 && (
             <div style={s.hostSelectorWrap}>
               <div style={s.hostSelectorLabel}>SERVIDOR</div>
-              <select style={s.hostSelect} value={selectedHost} onChange={e => setSelectedHost(e.target.value)}>
-                <option value="local">🖥 {d.local}</option>
-                {hosts.map(h => <option key={h.id} value={h.id}>🌐 {h.name}</option>)}
-              </select>
+              <HostSelector
+                hosts={hosts}
+                selectedHost={selectedHost}
+                onSelect={setSelectedHost}
+                localLabel={d.local}
+              />
             </div>
           )}
 
@@ -229,7 +324,10 @@ export default function Dashboard() {
             <button className="hamburger" style={s.hamburger} onClick={() => setSidebarOpen(v => !v)}>☰</button>
             <h1 style={s.pageTitle}>{allNavItems.find(nv=>nv.id===tab)?.label}</h1>
             {hosts.length > 0 && (
-              <span style={s.hostBadge}>{selectedHost === 'local' ? '🖥' : '🌐'} {currentHostName}</span>
+              <span style={s.hostBadge}>
+                <HostIcon os={selectedHost === 'local' ? 'local' : hosts.find(h => h.id === selectedHost)?.os} />
+                {currentHostName}
+              </span>
             )}
             {lastRefresh && tab !== 'settings' && tab !== 'deploy' && tab !== 'images' && tab !== 'networks' && tab !== 'volumes' && (
               <span style={s.refreshBadge}><span style={s.refreshDot} />{lastRefresh.toLocaleTimeString()}</span>
