@@ -594,7 +594,7 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
               </Field>
             </Section>
             <Section title={l.aboutTitle}>
-              <Field label={l.version}><span style={s.mono}>1.5.2</span></Field>
+              <Field label={l.version}><span style={s.mono}>1.5.3</span></Field>
               <Field label={l.stack}><span style={s.mono}>Node.js · React 18 · Socket.io</span></Field>
               <Field label={l.author}><span style={{color:'var(--brand-light)'}}>alvaro_lab</span></Field>
               <Field label={l.language}>
