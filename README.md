@@ -106,7 +106,7 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - Sidebar logo and subtitle update
 - i18n improvements
 
-### v1.5.3 — Current ✅
+### v1.5.3 ✅
 - **Add host wizard** — 3-step guided flow in Settings → Hosts
   - Step 1: name the host
   - Step 2: select OS (Windows, Ubuntu, Debian, Fedora, Red Hat, Rocky Linux, Alpine, Other Linux)
@@ -114,6 +114,13 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - OS logos in host selector and host list
 - Custom dropdown server selector with OS icons
 - One-command agent deployment — no manual `.env` required
+
+### v1.5.4 — Current ✅
+- **Agent install script** — wizard step 3 now downloads a ready-to-run bash script instead of showing a compose snippet to copy
+  - Script creates `docker-compose.yml` (env-var based) and `.env` with real credentials, runs `docker compose up -d`, then tails logs
+  - Download uses a pre-rendered `<a download>` with a data URI — no async onClick
+- **Non-root agent container** — `agent/Dockerfile` now runs as user `nexus` (added to `docker` group, GID 999)
+- Version bump to 1.5.4
 
 ### v1.6.0 — Watcher integration _(coming soon)_
 - Updates widget on dashboard showing pending image updates

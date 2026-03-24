@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useAuth } from '../AuthContext';
 import { useLang } from './LanguageContext';
@@ -203,8 +203,6 @@ function HostsPanel({ showToast, onHostsChange }) {
   const [wizardOS, setWizardOS]     = useState('ubuntu');
   const [wizardResult, setWizardResult] = useState(null);
   const [wizardCreating, setWizardCreating] = useState(false);
-  const [copied, setCopied]         = useState(false);
-
   const load = async () => {
     setLoading(true);
     try { const r = await axios.get('/api/hosts'); setHosts(r.data); onHostsChange?.(r.data); } catch {}
@@ -242,25 +240,52 @@ function HostsPanel({ showToast, onHostsChange }) {
     finally { setWizardCreating(false); }
   };
 
-  const getCompose = (nexusUrl, token, os) => {
-    const base = `services:\n  nexus-agent:\n    image: afraguas1983/nexus-agent:latest\n    container_name: nexus-agent\n    restart: unless-stopped\n    environment:\n      - NEXUS_URL=${nexusUrl}\n      - NEXUS_AGENT_TOKEN=${token}`;
-    if (os === 'windows') {
-      return base + `\n      - DOCKER_HOST=tcp://host.docker.internal:2375\n    extra_hosts:\n      - "host.docker.internal:host-gateway"`;
-    }
-    return base + `\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock`;
+  const getInstallScript = (nexusUrl, token, os) => {
+    const isWindows = os === 'windows';
+    const composeTail = isWindows
+      ? `      - DOCKER_HOST=tcp://host.docker.internal:2375\n    extra_hosts:\n      - "host.docker.internal:host-gateway"`
+      : `    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock`;
+    return `#!/usr/bin/env bash
+set -e
+
+echo "==> [1/4] Creating docker-compose.yml..."
+cat > docker-compose.yml << 'COMPOSE'
+services:
+  nexus-agent:
+    image: afraguas1983/nexus-agent:latest
+    container_name: nexus-agent
+    restart: unless-stopped
+    environment:
+      - NEXUS_URL=\${NEXUS_URL}
+      - NEXUS_AGENT_TOKEN=\${NEXUS_AGENT_TOKEN}
+${composeTail}
+COMPOSE
+
+echo "==> [2/4] Creating .env..."
+cat > .env << 'ENV'
+NEXUS_URL=${nexusUrl}
+NEXUS_AGENT_TOKEN=${token}
+ENV
+
+echo "==> [3/4] Starting NEXUS Agent..."
+docker compose up -d
+
+echo "==> [4/4] Showing logs — press Ctrl+C once the agent connects..."
+docker compose logs -f nexus-agent
+`;
   };
 
   const nexusUrl = window.location.origin;
 
-  const copyCompose = () => {
-    navigator.clipboard.writeText(getCompose(nexusUrl, wizardResult?.token, wizardOS));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const scriptHref = useMemo(() => {
+    if (!wizardResult) return '#';
+    const script = getInstallScript(nexusUrl, wizardResult.token, wizardOS);
+    return 'data:text/x-sh;charset=utf-8,' + encodeURIComponent(script);
+  }, [wizardResult, wizardOS]);
 
   const closeWizard = () => {
     setWizardStep(0); setWizardName(''); setWizardOS('ubuntu');
-    setWizardResult(null); setCopied(false);
+    setWizardResult(null);
   };
 
   const currentOsHint = OS_OPTIONS.find(o => o.id === wizardOS)?.hint;
@@ -325,7 +350,7 @@ function HostsPanel({ showToast, onHostsChange }) {
               <>
                 <div style={sw.modalHead}>
                   <div style={sw.modalTitle}>✅ Token generated for {wizardResult.name}</div>
-                  <div style={sw.modalSub}>Copy this docker-compose.yml to your remote host and run <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>docker compose up -d</code></div>
+                  <div style={sw.modalSub}>{l.scriptModalSub}</div>
                 </div>
                 <div style={sw.modalBody}>
                   <div style={sw.osToggle}>
@@ -333,18 +358,31 @@ function HostsPanel({ showToast, onHostsChange }) {
                       <button key={os.id}
                         style={{...sw.osToggleBtn, ...(wizardOS===os.id ? sw.osToggleBtnActive : {})}}
                         onClick={() => setWizardOS(os.id)} title={os.label}>
-                        <img src={os.src} width="16" height="16" alt={os.label} style={{display:'block'}} />
+                        {os.id === 'windows'
+                          ? <svg viewBox="0 0 32 32" width="16" height="16" xmlns="http://www.w3.org/2000/svg" style={{display:'block'}}><path fill="#00ADEF" d="M30,15H17c-0.6,0-1-0.4-1-1V3.3c0-0.5,0.4-0.9,0.8-1l13-2.3c0.3,0,0.6,0,0.8,0.2C30.9,0.4,31,0.7,31,1v13C31,14.6,30.6,15,30,15z"/><path fill="#00ADEF" d="M13,15H1c-0.6,0-1-0.4-1-1V6c0-0.5,0.4-0.9,0.8-1l12-2c0.3,0,0.6,0,0.8,0.2C13.9,3.4,14,3.7,14,4v10C14,14.6,13.6,15,13,15z"/><path fill="#00ADEF" d="M30,32c-0.1,0-0.1,0-0.2,0l-13-2.3c-0.5-0.1-0.8-0.5-0.8-1V18c0-0.6,0.4-1,1-1h13c0.6,0,1,0.4,1,1v13c0,0.3-0.1,0.6-0.4,0.8C30.5,31.9,30.2,32,30,32z"/><path fill="#00ADEF" d="M13,29c-0.1,0-0.1,0-0.2,0l-12-2C0.4,26.9,0,26.5,0,26v-8c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v10c0,0.3-0.1,0.6-0.4,0.8C13.5,28.9,13.2,29,13,29z"/></svg>
+                          : <img src={os.src} width="16" height="16" alt={os.label} style={{display:'block'}} />
+                        }
                       </button>
                     ))}
                   </div>
-                  <pre style={sw.codeBlock}>{getCompose(nexusUrl, wizardResult.token, wizardOS)}</pre>
-                  <div style={sw.tokenWarn}>⚠ This token is only shown once. Make sure to copy the compose above.</div>
+                  <div style={sw.scriptSteps}>
+                    <div style={sw.scriptStepsTitle}>{l.scriptWhatItDoes}</div>
+                    <ol style={sw.scriptOl}>
+                      <li>{l.scriptStep1}</li>
+                      <li>{l.scriptStep2}</li>
+                      <li><code style={{fontFamily:'var(--font-mono)',fontSize:'0.9em'}}>docker compose up -d</code></li>
+                      <li><code style={{fontFamily:'var(--font-mono)',fontSize:'0.9em'}}>docker compose logs -f nexus-agent</code> {l.scriptStep4suffix}</li>
+                    </ol>
+                    <div style={sw.scriptRunHint}>{l.scriptRunHint} <code style={{fontFamily:'var(--font-mono)',color:'var(--brand-light)'}}>bash install-nexus-agent.sh</code></div>
+                  </div>
+                  <div style={sw.tokenWarn}>⚠ {l.scriptTokenWarn}</div>
                 </div>
                 <div style={sw.modalFoot}>
                   <button style={sw.cancelBtn} onClick={closeWizard}>Close</button>
-                  <button style={{...sw.nextBtn, ...(copied ? {background:'var(--success)',borderColor:'var(--success)',color:'#000'} : {})}} onClick={copyCompose}>
-                    {copied ? '✔ Copied!' : '📋 Copy docker-compose.yml'}
-                  </button>
+                  <a href={scriptHref} download="install-nexus-agent.sh"
+                    style={{...sw.nextBtn, textDecoration:'none', display:'inline-flex', alignItems:'center', gap:'6px'}}>
+                    {l.scriptDownloadBtn}
+                  </a>
                 </div>
               </>
             )}
@@ -419,6 +457,10 @@ const sw = {
   osToggleBtnActive:{background:'var(--bg-elevated)'},
   codeBlock:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 14px',fontSize:'0.75em',fontFamily:'var(--font-mono)',color:'var(--text-secondary)',overflowX:'auto',lineHeight:1.7,margin:0},
   tokenWarn:{fontSize:'0.75em',color:'var(--warning)',marginTop:'10px'},
+  scriptSteps:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'12px 16px',marginBottom:'10px'},
+  scriptStepsTitle:{fontWeight:600,fontSize:'0.82em',marginBottom:'8px',color:'var(--text-secondary)'},
+  scriptOl:{margin:'0 0 8px 16px',padding:0,color:'var(--text-secondary)',fontSize:'0.82em',lineHeight:1.9},
+  scriptRunHint:{fontSize:'0.78em',color:'var(--text-muted)',marginTop:'4px'},
 };
 
 export default function SettingsView({ onSettingsChange, onHostsChange }) {
@@ -594,7 +636,7 @@ export default function SettingsView({ onSettingsChange, onHostsChange }) {
               </Field>
             </Section>
             <Section title={l.aboutTitle}>
-              <Field label={l.version}><span style={s.mono}>1.5.3</span></Field>
+              <Field label={l.version}><span style={s.mono}>1.5.4</span></Field>
               <Field label={l.stack}><span style={s.mono}>Node.js · React 18 · Socket.io</span></Field>
               <Field label={l.author}><span style={{color:'var(--brand-light)'}}>alvaro_lab</span></Field>
               <Field label={l.language}>

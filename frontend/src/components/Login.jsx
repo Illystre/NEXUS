@@ -111,7 +111,7 @@ export default function Login() {
           </button>
 
           <div style={s.footer}>
-            <span style={s.footerText}>NEXUS v1.5.3</span>
+            <span style={s.footerText}>NEXUS v1.5.4</span>
           </div>
         </div>
       </div>

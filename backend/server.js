@@ -654,7 +654,7 @@ app.delete('/api/volumes/:name', authMiddleware, adminOnly, async (req, res) => 
 });
 
 // ── Info ──────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.3' }));
+app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.4' }));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
