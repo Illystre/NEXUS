@@ -356,7 +356,7 @@ export default function Login() {
 
         {/* Footer */}
         <div className="login-footer">
-          <span className="login-version">NEXUS v1.5.4</span>
+          <span className="login-version">NEXUS v{__APP_VERSION__}</span>
         </div>
       </div>
     </div>

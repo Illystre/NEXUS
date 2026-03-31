@@ -1,6 +1,6 @@
 {
   "name": "docker-manager-backend",
-  "version": "1.5.1",
+  "version": "1.5.6",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
