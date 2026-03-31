@@ -7,9 +7,8 @@ RUN npm install --production
 
 COPY nexus-agent.js .
 
-RUN (grep -q '^docker:' /etc/group || addgroup -g 999 docker) && \
-    adduser -D nexus && \
-    addgroup nexus docker
+RUN adduser -D nexus && \
+    (grep -q '^docker:' /etc/group && addgroup nexus docker || true)
 
 USER nexus
 
