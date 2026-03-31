@@ -8,6 +8,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { execSync, exec } = require('child_process');
+const hub = require('./hub');
 
 const app = express();
 const server = http.createServer(app);
@@ -98,10 +99,18 @@ function logEvent({ type, actor, target, detail }) {
   events.unshift(ev);
   if (events.length > 500) events.pop();
   io.emit('event:new', ev);
+  hub.pushEvent({ type, actor: ev.actor, target: ev.target, detail: ev.detail });
   return ev;
 }
 
 function authMiddleware(req, res, next) {
+  // Service-to-service: NEXUS Hub uses the shared API key
+  const apiKey = process.env.NEXUS_API_KEY;
+  const incomingKey = req.headers['x-api-key'];
+  if (apiKey && incomingKey && incomingKey === apiKey) {
+    req.user = { username: 'nexus-hub', role: 'admin' };
+    return next();
+  }
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token' });
   try { req.user = jwt.verify(token, JWT_SECRET); next(); }
@@ -148,14 +157,43 @@ async function dockerCommand(hostId, command, params = {}) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+
+  // Hub mode: validate credentials against Hub user store
+  if (process.env.NEXUS_HUB_URL && process.env.NEXUS_API_KEY) {
+    try {
+      const hubUser = await hub.validateUser(username, password);
+      const token = jwt.sign({ id: hubUser.username, username: hubUser.username, role: hubUser.role }, JWT_SECRET, { expiresIn: '24h' });
+      logEvent({ type: 'login', actor: username, detail: `Hub-validated login from IP ${req.ip}` });
+      return res.json({ token, role: hubUser.role });
+    } catch (e) {
+      // Hub explicitly rejected the credentials → stop here, don't fall through to local
+      if (e.status === 401) return res.status(401).json({ error: 'Invalid credentials' });
+      // Hub unreachable → fall back to local auth so admin can always get in
+      console.warn('[hub] validateUser failed, falling back to local auth:', e.message);
+    }
+  }
+
+  // Local auth (standalone mode or Hub unreachable)
   const user = users.find(u => u.username === username);
   if (!user || !bcrypt.compareSync(password, user.passwordHash))
     return res.status(401).json({ error: 'Invalid credentials' });
   const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
   logEvent({ type: 'login', actor: username, detail: `Login from IP ${req.ip}` });
   res.json({ token, role: user.role });
+});
+
+// SSO — Hub requests a short-lived token carrying the Hub user's identity
+app.post('/api/auth/sso-hub', (req, res) => {
+  const configured = process.env.NEXUS_API_KEY;
+  const { apiKey, user } = req.body || {};
+  if (!configured || !apiKey || apiKey !== configured)
+    return res.status(401).json({ error: 'Invalid API key' });
+  const username = user?.username || 'admin';
+  const role     = user?.role     || 'viewer';
+  const token = jwt.sign({ username, role, sso: true }, JWT_SECRET, { expiresIn: '5m' });
+  res.json({ token });
 });
 
 // ── Hosts ─────────────────────────────────────────────────────────────────────
@@ -170,6 +208,7 @@ app.post('/api/hosts', authMiddleware, adminOnly, (req, res) => {
   hosts.push(newHost);
   saveHosts(hosts);
   logEvent({ type: 'host:created', actor: req.user.username, target: name, detail: url });
+  hub.syncHost(newHost, 'POST');
   res.json(newHost);
 });
 
@@ -182,6 +221,7 @@ app.put('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
   if (url) host.url = url;
   saveHosts(hosts);
   logEvent({ type: 'host:updated', actor: req.user.username, target: host.name });
+  hub.syncHost(host, 'POST');
   res.json(host);
 });
 
@@ -192,6 +232,7 @@ app.delete('/api/hosts/:id', authMiddleware, adminOnly, (req, res) => {
   const deleted = hosts.splice(idx, 1)[0];
   saveHosts(hosts);
   logEvent({ type: 'host:deleted', actor: req.user.username, target: deleted.name });
+  hub.syncHost({ id: deleted.id }, 'DELETE');
   res.json({ ok: true });
 });
 
@@ -654,7 +695,13 @@ app.delete('/api/volumes/:name', authMiddleware, adminOnly, async (req, res) => 
 });
 
 // ── Info ──────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.5.4' }));
+const healthPayload = () => ({
+  status: 'ok', version: '1.5.4',
+  hubMode: !!process.env.NEXUS_HUB_URL,
+  hubUrl:  process.env.NEXUS_PUBLIC_HUB_URL || null,
+});
+app.get('/api/health', (req, res) => res.json(healthPayload()));
+app.get('/health',     (req, res) => res.json(healthPayload()));
 
 app.get('/api/info', authMiddleware, async (req, res) => {
   try {
@@ -903,4 +950,20 @@ agentNs.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`NEXUS backend on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`NEXUS backend on port ${PORT}`);
+  hub.setStatsProvider(async () => {
+    const [containers, hosts] = await Promise.all([
+      localDocker.listContainers({ all: true }).catch(() => []),
+      Promise.resolve(loadHosts()),
+    ]);
+    return {
+      containers: containers.length,
+      running: containers.filter(c => c.State === 'running').length,
+      hosts: hosts.length,
+    };
+  });
+  hub.init();
+  // Sync all existing hosts to Hub so the directory is up-to-date after restarts
+  setTimeout(() => hub.syncAllHosts(loadHosts()), 5000);
+});

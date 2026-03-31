@@ -1,6 +1,6 @@
 {
   "name": "nexus-agent",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "NEXUS Agent — connects your Docker host to NEXUS",
   "main": "nexus-agent.js",
   "scripts": {
@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "dockerode": "^4.0.2",
+    "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   },
   "license": "MIT"

@@ -67,6 +67,9 @@ const translations = {
       realtime: 'Real-time', realtimeSub: 'Live metrics',
       secure: 'Secure', secureSub: 'JWT Auth',
       fast: 'Fast', fastSub: '3s update',
+      signInWithHub: 'Sign in with NEXUS Hub',
+      hubModeNotice: 'This instance is connected to NEXUS Hub. Use Hub for centralized login.',
+      orLocal: 'or use local credentials',
     },
     settings: {
       appearance: 'Appearance', profile: 'Profile', users: 'Users',
@@ -243,6 +246,9 @@ const translations = {
       realtime: 'Real-time', realtimeSub: 'Métricas en vivo',
       secure: 'Secure', secureSub: 'Auth JWT',
       fast: 'Fast', fastSub: 'Actualización 3s',
+      signInWithHub: 'Acceder con NEXUS Hub',
+      hubModeNotice: 'Esta instancia está conectada a NEXUS Hub. Usa Hub para el inicio de sesión centralizado.',
+      orLocal: 'o usa credenciales locales',
     },
     settings: {
       appearance: 'Apariencia', profile: 'Perfil', users: 'Usuarios',

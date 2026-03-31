@@ -44,7 +44,7 @@
 ```bash
 docker run -d \
   --name nexus \
-  -p 9090:9090 \
+  -p 9090:3001 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   afraguas1983/nexus:latest
 ```
@@ -59,6 +59,29 @@ docker compose up -d
 ```
 
 Open **http://localhost:9090** — default credentials: `admin` / `admin`
+
+---
+
+## 🔗 NEXUS Hub (optional)
+
+NEXUS works fully standalone — no Hub required. Hub is an optional add-on that adds:
+
+- **Centralised login** — one user database for all NEXUS ecosystem tools
+- **SSO** — click "Open" in Hub to jump straight into NEXUS without re-logging in
+- **Service registry** — Hub shows a live overview of all connected tools and their stats
+- **Host directory** — hosts added in NEXUS are shared with Watcher, Pulse, etc.
+
+To connect NEXUS to Hub, set these variables in your `.env`:
+
+```env
+NEXUS_HUB_URL=http://nexus-hub:3003        # internal Docker network address of Hub
+NEXUS_API_KEY=your-shared-secret           # must match Hub's NEXUS_API_KEY
+NEXUS_URL=http://nexus:3001                # internal address Hub uses to poll /health
+NEXUS_PUBLIC_URL=http://your-server:9090   # browser-accessible URL shown in Hub
+NEXUS_PUBLIC_HUB_URL=http://your-server:9095
+```
+
+Leave `NEXUS_HUB_URL` empty (the default) to run in standalone mode.
 
 ---
 
@@ -122,10 +145,15 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - **Non-root agent container** — `agent/Dockerfile` now runs as user `nexus` (added to `docker` group, GID 999)
 - Version bump to 1.5.4
 
-### v1.6.0 — Watcher integration _(coming soon)_
-- Updates widget on dashboard showing pending image updates
+### v1.6.0 — Dark Premium redesign _(coming soon)_
+- Complete UI overhaul — Dark Premium design language (Linear / Vercel aesthetic)
+- New design system: Inter + JetBrains Mono, layered dark backgrounds, accent-driven colour system
+- Sidebar with Lucide React icons and proper active/hover states
+- Stat cards on dashboard (Total, Running, Stopped, Images) with skeleton loading
+- Login page redesigned: centred card with radial accent glow, fadeSlideUp animation
+- Shared component library: Button, Badge, Card, Input, EmptyState, Skeleton
+- Watcher integration — updates widget on dashboard showing pending image updates
 - One-click update and rollback from NEXUS UI
-- Integration with NEXUS Watcher API
 
 ### v2.0.0 — NEXUS Ecosystem 🚀 _(Q4 2026)_
 
