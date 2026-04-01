@@ -145,7 +145,7 @@ The agent connects automatically to NEXUS and the remote host appears in the ser
 - **Non-root agent container** — `agent/Dockerfile` now runs as user `nexus` (added to `docker` group, GID 999)
 - Version bump to 1.5.4
 
-### v1.6.0 — Dark Premium redesign ✅
+### v1.5.6 — Dark Premium redesign ✅
 - Complete UI overhaul — Dark Premium design language (Linear / Vercel aesthetic)
 - New design system: Inter + JetBrains Mono, layered dark backgrounds, accent-driven colour system
 - Sidebar with Lucide React icons and proper active/hover states
